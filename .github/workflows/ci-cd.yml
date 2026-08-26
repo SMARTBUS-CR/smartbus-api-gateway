@@ -18,6 +18,8 @@ jobs:
     lint:
         name: Fix Code Style
         runs-on: ubuntu-latest
+        permissions:
+            contents: write
         outputs:
             new_sha: ${{ steps.auto-commit.outputs.commit_hash }}
         strategy:
