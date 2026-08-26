@@ -3,6 +3,19 @@
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
+$resolveSslPath = static function ($path) {
+    if (! is_string($path) || $path === '') {
+        return null;
+    }
+
+    // Absolute path on Unix or Windows.
+    if ($path[0] === '/' || preg_match('/^[A-Za-z]:[\\\\\/]/', $path)) {
+        return $path;
+    }
+
+    return base_path($path);
+};
+
 return [
 
     /*
@@ -60,7 +73,7 @@ return [
             'strict' => true,
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
-                Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA') ? $resolveSslPath(env('MYSQL_ATTR_SSL_CA')) : null,
             ]) : [],
         ],
 
@@ -80,7 +93,7 @@ return [
             'strict' => true,
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
-                Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA') ? $resolveSslPath(env('MYSQL_ATTR_SSL_CA')) : null,
             ]) : [],
         ],
 
