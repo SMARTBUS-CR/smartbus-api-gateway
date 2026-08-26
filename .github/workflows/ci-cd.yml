@@ -1,0 +1,92 @@
+name: CI/CD Pipeline
+
+on:
+    push:
+        branches: ["main", "dev", "feature/*", "hotfix/*"]
+    pull_request:
+        branches: ["main", "dev"]
+
+# Stop concurrent runs of the same workflow on the same branch to prevent conflicts and redundant deployments
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    # ==========================================
+    # STEP 1: LINTING (Laravel Pint)
+    # ==========================================
+    lint:
+        name: Fix Code Style
+        runs-on: ubuntu-latest
+        outputs:
+            new_sha: ${{ steps.auto-commit.outputs.commit_hash }}
+        strategy:
+            fail-fast: true
+            matrix:
+                php: [8.4]
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v5
+              with:
+                  ref: ${{ github.head_ref || github.ref }}
+
+            - name: Setup PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: ${{ matrix.php }}
+                  tools: pint
+
+            - name: Run Pint
+              run: pint
+
+            - name: Commit linted files
+              id: auto-commit
+              uses: stefanzweifel/git-auto-commit-action@v6
+              with:
+                  commit_message: "chore: fix code style with Laravel Pint"
+
+    # ==========================================
+    # STEP 2: TESTING (Laravel Pest)
+    # ==========================================
+    laravel-tests:
+        name: Run Laravel Tests
+        runs-on: ubuntu-latest
+        needs: [lint]
+        env:
+            APP_ENV: testing
+            DB_CONNECTION: sqlite
+            DB_DATABASE: database/database.sqlite
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v6
+              with:
+                  ref: ${{ needs.lint.outputs.new_sha || github.head_ref || github.ref }}
+
+            # ==========================================
+            # STEP 2.1: LARAVEL TESTS (Pest/PHPUnit)
+            # ==========================================
+
+            - name: Setup PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: 8.4
+                  coverage: xdebug
+
+            - name: Install Dependencies
+              run: composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+
+            - name: Setup Node
+              uses: actions/setup-node@v6
+              with:
+                  node-version: lts/*
+                  cache: "npm"
+                  cache-dependency-path: package-lock.json
+
+            - name: Directory Permissions
+              run: chmod -R 777 storage bootstrap/cache
+
+            - name: Run CI Bootstrap
+              run: composer run ci
+
+            - name: Run Tests
+              run: php artisan test --ci --parallel --compact
