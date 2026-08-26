@@ -18,7 +18,7 @@ return [
     'paths' => ['api/*', 'sanctum/csrf-cookie'],
 
     'allowed_methods' => ['*'],
-    
+
     'allowed_origins' => explode(',',
         env('ALLOWED_ORIGINS', 'http://localhost:8000')
     ),
