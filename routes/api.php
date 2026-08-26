@@ -5,7 +5,7 @@ use App\Http\Controllers\GatewayProxyController;
 use Illuminate\Support\Facades\Route;
 
 /**
- * Define API routes for the SmartBus API Gateway. These routes act as a reverse proxy to various microservices, 
+ * Define API routes for the SmartBus API Gateway. These routes act as a reverse proxy to various microservices,
  * validating authentication tokens and forwarding requests to the appropriate service.
  */
 Route::middleware('validate.token')->group(function () {

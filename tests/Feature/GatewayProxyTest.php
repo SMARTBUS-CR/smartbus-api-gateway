@@ -191,9 +191,9 @@ describe('CORS Restrictions', function () {
         $response = $this->withHeaders([
             'Origin' => 'https://admin.smartbus.com',
         ])->postJson('/api/auth/login', [
-                    'email' => 'user@example.com',
-                    'password' => 'password123',
-                ]);
+            'email' => 'user@example.com',
+            'password' => 'password123',
+        ]);
 
         $response->assertHeader('Access-Control-Allow-Origin', 'https://admin.smartbus.com');
     });
