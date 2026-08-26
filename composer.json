@@ -50,6 +50,12 @@
             "npm install --ignore-scripts",
             "npm run build"
         ],
+        "ci": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
+            "@php artisan key:generate",
+            "@php -r \"is_dir('database') || mkdir('database', 0777, true); file_exists('database/database.sqlite') || touch('database/database.sqlite');\"",
+            "npm ci"
+        ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
             "@php artisan dev"
