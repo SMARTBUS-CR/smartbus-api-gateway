@@ -90,7 +90,8 @@ return [
             'view' => 'scramble::scalar',
             'cdn' => 'https://cdn.jsdelivr.net/npm/@scalar/api-reference',
             'theme' => 'purple',
-            'proxyUrl' => 'https://proxy.scalar.com',
+            // 'proxyUrl' => 'https://proxy.scalar.com',
+            'proxyUrl' => null,
             'darkMode' => true,
             'showDeveloperTools' => 'never',
             'agent' => ['disabled' => true],
@@ -112,7 +113,10 @@ return [
      * ],
      * ```
      */
-    'servers' => null,
+    'servers' => [
+        'Production' => 'https://smartbus-api-gateway.onrender.com/api',
+        'Development' => 'https://smartbus-api-gateway-dev.onrender.com/api',
+    ],
 
     /**
      * Determines how Scramble stores the descriptions of enum cases.
