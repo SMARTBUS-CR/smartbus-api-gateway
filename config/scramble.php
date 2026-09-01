@@ -113,10 +113,19 @@ return [
      * ],
      * ```
      */
-    'servers' => [
-        'Production' => 'https://smartbus-api-gateway.onrender.com/api',
-        'Development' => 'https://smartbus-api-gateway-dev.onrender.com/api',
-    ],
+    'servers' => match (env('APP_ENV')) {
+        'production' => [
+            'Production' => 'https://smartbus-api-gateway.onrender.com/api',
+        ],
+        'local' => [
+            'Local1' => 'http://localhost:8000/api',
+            'Local2' => 'https://smartbus-api-gateway.test/api',
+            'Cloud' => 'https://smartbus-api-gateway-dev.onrender.com/api',
+        ],
+        default => [
+            'Development' => 'https://smartbus-api-gateway-dev.onrender.com/api',
+        ],
+    },
 
     /**
      * Determines how Scramble stores the descriptions of enum cases.
@@ -187,7 +196,7 @@ return [
     'security_strategy' => [
         MiddlewareAuthSecurityStrategy::class,
         [
-            'middleware' => ['auth', 'auth:*'],
+            'middleware' => ['auth', 'auth:*', 'validate.token'],
             'scheme' => SecurityScheme::http('bearer'),
         ],
     ],
