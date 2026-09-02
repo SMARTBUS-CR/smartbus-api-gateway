@@ -67,7 +67,7 @@ describe('Protected Routes and Auth Middleware', function () {
 
     it('rejects protected routes when auth service returns invalid token', function () {
         Http::fake([
-            'https://smartbus-authentication.test/api/tokens/validate' => Http::response([], 401),
+            'https://smartbus-authentication.test/api/token/validate' => Http::response([], 401),
         ]);
 
         $response = withToken('invalid-token')
@@ -82,12 +82,15 @@ describe('Protected Routes and Auth Middleware', function () {
 
         Http::fake([
             // Token introspection
-            'https://smartbus-authentication.test/api/tokens/validate' => Http::response([
-                'valid' => true,
-                'user_id' => 10,
-                'email' => 'admin@smartbus.com',
-                'roles' => ['admin'],
-                'permissions' => ['manage-users'],
+            'https://smartbus-authentication.test/api/token/validate' => Http::response([
+                'meta' => [
+                    'valid' => true,
+                    'user_id' => 10,
+                    'email' => 'admin@smartbus.com',
+                    'roles' => ['admin'],
+                    'permissions' => ['manage-users'],
+                    'expires_at' => now()->addMinutes(10)->toISOString(),
+                ],
             ], 200),
             // Auth service /user endpoint response
             'https://smartbus-authentication.test/api/user' => Http::response([
@@ -108,12 +111,15 @@ describe('Gateway Cache and Logout Handling', function () {
         $token = 'cached-token-abc';
 
         Http::fake([
-            'https://smartbus-authentication.test/api/tokens/validate' => Http::response([
-                'valid' => true,
-                'user_id' => 99,
-                'email' => 'cached@example.com',
-                'roles' => ['passenger'],
-                'permissions' => [],
+            'https://smartbus-authentication.test/api/token/validate' => Http::response([
+                'meta' => [
+                    'valid' => true,
+                    'user_id' => 99,
+                    'email' => 'cached@example.com',
+                    'roles' => ['passenger'],
+                    'permissions' => [],
+                    'expires_at' => now()->addMinutes(10)->toISOString(),
+                ],
             ], 200),
             'https://smartbus-authentication.test/api/user' => Http::response([], 200),
         ]);
@@ -126,7 +132,7 @@ describe('Gateway Cache and Logout Handling', function () {
 
         // Assert: Only one call to the auth service for token validation was made
         Http::assertSent(function ($request) {
-            return $request->url() === 'https://smartbus-authentication.test/api/tokens/validate';
+            return $request->url() === 'https://smartbus-authentication.test/api/token/validate';
         }, 1);
     });
 
@@ -139,12 +145,15 @@ describe('Gateway Cache and Logout Handling', function () {
         expect(Cache::has($cacheKey))->toBeTrue();
 
         Http::fake([
-            'https://smartbus-authentication.test/api/tokens/validate' => Http::response([
-                'valid' => true,
-                'user_id' => 1,
-                'email' => 'test@example.com',
-                'roles' => [],
-                'permissions' => [],
+            'https://smartbus-authentication.test/api/token/validate' => Http::response([
+                'meta' => [
+                    'valid' => true,
+                    'user_id' => 1,
+                    'email' => 'test@example.com',
+                    'roles' => [],
+                    'permissions' => [],
+                    'expires_at' => now()->addMinutes(10)->toISOString(),
+                ],
             ], 200),
             'https://smartbus-authentication.test/api/logout' => Http::response([
                 'message' => __('Session closed successfully.'),
