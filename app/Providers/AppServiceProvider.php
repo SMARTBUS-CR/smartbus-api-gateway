@@ -44,6 +44,12 @@ class AppServiceProvider extends ServiceProvider
         Scramble::afterOpenApiGenerated(function (OpenApi $openApi) {
             foreach ($openApi->paths as $path) {
                 foreach ($path->operations as $operation) {
+                    foreach ($operation->parameters as $parameter) {
+                        if ($parameter->in === 'query' && str_ends_with($parameter->name, '[]')) {
+                            $parameter->setName(substr($parameter->name, 0, -2));
+                        }
+                    }
+
                     $operation->addParameters([
                         Parameter::make('Accept-Language', 'header')
                             ->description('Language of the response. Supported values: en, es.')

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Enums\Services;
+use Dedoc\Scramble\Attributes\BodyParameter;
 use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\QueryParameter;
 use Dedoc\Scramble\Attributes\Response as ResponseAttribute;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -13,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Response as HttpStatus;
 
-#[Group('Authentication Service', 'This group contains endpoints that interact with the Authentication microservice. <br>These endpoints handle user registration, login, and logout operations by forwarding requests to the Auth microservice.<br><br>For more information about the Auth microservice, see the [SmartBus Authentication](https://smartbus-authentication.onrender.com/) documentation.')]
+#[Group('Authentication Service', 'This group contains endpoints that interact with the Authentication microservice. <br>These endpoints handle user registration, login, and logout operations by forwarding requests to the Auth microservice.<br><br>For more information about the Auth microservice, see the [SmartBus Authentication](https://smartbus-authentication.onrender.com/) documentation.', weight: 1)]
 class AuthController extends Controller
 {
     /**
@@ -28,7 +30,14 @@ class AuthController extends Controller
      *
      * @throws ValidationException
      */
-    #[ResponseAttribute(status: HttpStatus::HTTP_CREATED, description: 'User registered successfully.')]
+    #[QueryParameter('include', type: 'array<string>', infer: false)]
+    #[QueryParameter('fields[users]', type: 'array<string>', infer: false)]
+    #[QueryParameter('fields[roles]', type: 'array<string>', infer: false)]
+    #[BodyParameter('name', type: 'string', required: true)]
+    #[BodyParameter('email', type: 'string', format: 'email', required: true)]
+    #[BodyParameter('password', type: 'string', format: 'password', required: true)]
+    #[BodyParameter('password_confirmation', type: 'string', format: 'password', required: true)]
+    #[ResponseAttribute(status: HttpStatus::HTTP_CREATED, mediaType: 'application/vnd.api+json', type: 'array{data: array{type: string, id: string, attributes: array<string, mixed>}, included?: array<int, array{type: string, id: string, attributes: array<string, mixed>}}, meta: array{access_token: string, token_type: string, expires_at: string}}')]
     public function registerPassenger(Request $request): Response
     {
         /**
@@ -66,7 +75,12 @@ class AuthController extends Controller
      *
      * @throws ValidationException
      */
-    #[ResponseAttribute(status: HttpStatus::HTTP_OK, description: 'User authenticated successfully.')]
+    #[QueryParameter('include', type: 'array<string>', infer: false)]
+    #[QueryParameter('fields[users]', type: 'array<string>', infer: false)]
+    #[QueryParameter('fields[roles]', type: 'array<string>', infer: false)]
+    #[BodyParameter('email', type: 'string', format: 'email', required: true)]
+    #[BodyParameter('password', type: 'string', required: true)]
+    #[ResponseAttribute(status: HttpStatus::HTTP_OK, mediaType: 'application/vnd.api+json', type: 'array{data: array{type: string, id: string, attributes: array<string, mixed>}, included?: array<int, array{type: string, id: string, attributes: array<string, mixed>}}, meta: array{access_token: string, token_type: string, expires_at: string}}')]
     public function login(Request $request): Response
     {
         Log::info('Login request received', ['request' => $request->all()]);
@@ -106,8 +120,8 @@ class AuthController extends Controller
      *
      * @throws UnauthorizedException
      */
-    #[ResponseAttribute(status: HttpStatus::HTTP_OK, description: 'Token is valid.', type: 'array{meta: array{valid: bool, expires_at: string}}')]
-    #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, description: 'Token is invalid or expired.', type: 'array{errors: array{status: string, title: string, detail: string}}')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_OK, mediaType: 'application/json', type: 'array{meta: array{valid: bool, expires_at: string}}')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, description: 'Token is invalid or expired.', mediaType: 'application/json', type: 'array{errors: array{status: string, title: string, detail: string}}')]
     public function validateToken(Request $request): Response
     {
         return $this->proxyTo(
@@ -131,8 +145,8 @@ class AuthController extends Controller
      *
      * @throws UnauthorizedException
      */
-    #[ResponseAttribute(status: HttpStatus::HTTP_OK, description: 'Successfully logged out.', type: 'array{meta: array{message: string}}')]
-    #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, description: 'Token is invalid or expired.', type: 'array{message: string}')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_OK, description: 'Successfully logged out.', mediaType: 'application/json', type: 'array{meta: array{message: string}}')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, description: 'Token is invalid or expired.', mediaType: 'application/json', type: 'array{message: string}')]
     public function logout(Request $request): Response
     {
         $token = $request->bearerToken();
@@ -161,8 +175,11 @@ class AuthController extends Controller
      *
      * @throws UnauthorizedException
      */
-    #[ResponseAttribute(status: HttpStatus::HTTP_OK, description: 'Authenticated user retrieved successfully.')]
-    #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, description: 'Token is invalid or expired.', type: 'array{message: string}')]
+    #[QueryParameter('include', type: 'array<string>', infer: false)]
+    #[QueryParameter('fields[users]', type: 'array<string>', infer: false)]
+    #[QueryParameter('fields[roles]', type: 'array<string>', infer: false)]
+    #[ResponseAttribute(status: HttpStatus::HTTP_OK, mediaType: 'application/vnd.api+json', type: 'array{data: array{type: string, id: string, attributes: array<string, mixed>, relationships?: array<string, mixed>}, included?: array<int, array{type: string, id: string, attributes: array<string, mixed>}}')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, description: 'Token is invalid or expired.', mediaType: 'application/json', type: 'array{message: string}')]
     public function user(Request $request): Response
     {
         /**
@@ -186,50 +203,6 @@ class AuthController extends Controller
             $request,
             Services::AUTH->value,
             'user'
-        );
-    }
-
-    /**
-     * Send Reset Code
-     *
-     * Sends a 6-digit password reset code to the user's email.
-     * The code is valid for 15 minutes.
-     *
-     * For more information about the forgot password endpoint, see the
-     * [Forgot Password](https://smartbus-authentication.onrender.com/docs/api#tag/password-reset/POST/password/forgot)
-     * section in the Auth microservice documentation.
-     *
-     * @throws ValidationException
-     */
-    #[ResponseAttribute(status: HttpStatus::HTTP_OK, description: 'Reset code sent successfully.', type: 'array{meta: array{message: string}}')]
-    public function sendResetCode(Request $request): Response
-    {
-        return $this->proxyTo(
-            $request,
-            Services::AUTH->value,
-            'password/forgot'
-        );
-    }
-
-    /**
-     * Reset Password
-     *
-     * Resets the user's password using the provided reset code.
-     * The code must match the one sent to the user's email and must not be expired.
-     *
-     * For more information about the reset password endpoint, see the
-     * [Reset Password](https://smartbus-authentication.onrender.com/docs/api#tag/password-reset/POST/password/reset)
-     *
-     * @throws ValidationException
-     */
-    #[ResponseAttribute(status: HttpStatus::HTTP_OK, description: 'Password reset successfully.', type: 'array{meta: array{message: string}}')]
-    #[ResponseAttribute(status: HttpStatus::HTTP_BAD_REQUEST, description: 'Invalid or expired reset code.', type: 'array{errors: array{status: string, title: string, detail: string}}')]
-    public function resetPassword(Request $request): Response
-    {
-        return $this->proxyTo(
-            $request,
-            Services::AUTH->value,
-            'password/reset'
         );
     }
 }

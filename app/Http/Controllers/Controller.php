@@ -59,7 +59,9 @@ abstract class Controller
         return response(
             $response->body(),
             $response->status(),
-        )->header('Content-Type', 'application/json');
+        )->withHeaders([
+            'Content-Type' => 'application/json',
+        ]);
     }
 
     /**
