@@ -77,6 +77,7 @@ abstract class Controller
     {
         $url = match ($service) {
             Services::AUTH->value => config('services.auth.url'),
+            Services::GPS->value => config('services.gps.url'),
             default => throw new \InvalidArgumentException(__('Service Not Found').": {$service}"),
         };
 
