@@ -6,4 +6,5 @@ enum Services: string
 {
     case AUTH = 'auth';
     case FILAMENT = 'admin';
+    case GPS = 'gps';
 }

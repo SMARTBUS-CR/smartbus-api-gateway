@@ -39,4 +39,8 @@ return [
         'url' => env('AUTH_SERVICE_URL', 'http://localhost:8000'),
     ],
 
+    'gps' => [
+        'url' => env('GPS_SERVICE_URL', 'http://localhost:8001'),
+    ],
+
 ];
