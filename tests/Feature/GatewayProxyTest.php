@@ -10,8 +10,8 @@ use function Pest\Laravel\withToken;
 
 beforeEach(function () {
     config([
-        'services.auth.url' => 'https://smartbus-authentication.test',
-        'services.trips.url' => 'https://smartbus-trips-dev.onrender.com',
+        'smartbus.auth.url' => 'https://smartbus-authentication.test',
+        'smartbus.trips.url' => 'https://smartbus-trips-dev.onrender.com',
     ]);
 });
 

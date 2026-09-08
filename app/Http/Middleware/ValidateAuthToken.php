@@ -39,7 +39,7 @@ class ValidateAuthToken
             Log::info('Token not found in cache, validating with Auth service');
 
             try {
-                $response = Http::baseUrl(config('services.auth.url'))
+                $response = Http::baseUrl(config('smartbus.auth.url'))
                     ->withToken($token)
                     ->acceptJson()
                     ->timeout(5)

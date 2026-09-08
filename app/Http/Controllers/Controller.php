@@ -78,7 +78,9 @@ abstract class Controller
     private function inferServiceUrl(?string $service = null): string
     {
         $url = match ($service) {
-            Services::AUTH->value => config('services.auth.url'),
+            Services::AUTH->value => config('smartbus.auth.url'),
+            Services::GPS->value => config('smartbus.gps.url'),
+            Services::ETA->value => config('smartbus.eta.url'),
             default => throw new \InvalidArgumentException(__('Service Not Found').": {$service}"),
         };
 
