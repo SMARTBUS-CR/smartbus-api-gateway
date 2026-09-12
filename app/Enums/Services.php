@@ -5,5 +5,6 @@ namespace App\Enums;
 enum Services: string
 {
     case AUTH = 'auth';
-    case FILAMENT = 'admin';
+    case GPS = 'gps';
+    case ETA = 'eta';
 }

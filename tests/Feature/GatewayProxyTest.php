@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Route;
 
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\postJson;
@@ -9,8 +10,8 @@ use function Pest\Laravel\withToken;
 
 beforeEach(function () {
     config([
-        'services.auth.url' => 'https://smartbus-authentication.test',
-        'services.trips.url' => 'https://smartbus-trips-dev.onrender.com',
+        'smartbus.auth.url' => 'https://smartbus-authentication.test',
+        'smartbus.trips.url' => 'https://smartbus-trips-dev.onrender.com',
     ]);
 });
 
@@ -23,7 +24,7 @@ describe('Public Auth Routes', function () {
             ], 200),
         ]);
 
-        $response = postJson('/api/auth/login', [
+        $response = postJson(route('auth.login'), [
             'email' => 'user@example.com',
             'password' => 'password123',
         ]);
@@ -45,7 +46,7 @@ describe('Public Auth Routes', function () {
             ], 201),
         ]);
 
-        $response = postJson('/api/auth/register/passenger', [
+        $response = postJson(route('auth.register.passenger'), [
             'name' => 'Passenger Test',
             'email' => 'passenger@example.com',
             'password' => 'Password123!',
@@ -57,9 +58,40 @@ describe('Public Auth Routes', function () {
     });
 });
 
+describe('Administrative Auth Routes', function () {
+    it('registers the administrative endpoints under dedicated controllers', function () {
+        $expectedRoutes = [
+            'auth.permissions.index' => ['GET', 'PermissionsController@index'],
+            'auth.roles.index' => ['GET', 'RolesController@index'],
+            'auth.users.index' => ['GET', 'UsersController@index'],
+            'auth.users.store' => ['POST', 'UsersController@store'],
+            'auth.users.show' => ['GET', 'UsersController@show'],
+            'auth.users.update' => ['PATCH', 'UsersController@update'],
+            'auth.users.destroy' => ['DELETE', 'UsersController@destroy'],
+            'auth.users.roles.index' => ['GET', 'UserRolesController@roles'],
+            'auth.users.roles.update' => ['PUT', 'UserRolesController@syncRoles'],
+            'auth.users.roles.store' => ['POST', 'UserRolesController@assignRole'],
+            'auth.users.roles.destroy' => ['DELETE', 'UserRolesController@revokeRole'],
+            'auth.users.permissions.index' => ['GET', 'UserPermissionsController@permissions'],
+            'auth.users.permissions.update' => ['PUT', 'UserPermissionsController@syncPermissions'],
+            'auth.users.permissions.store' => ['POST', 'UserPermissionsController@assignPermission'],
+            'auth.users.permissions.destroy' => ['DELETE', 'UserPermissionsController@revokePermission'],
+        ];
+
+        foreach ($expectedRoutes as $name => [$method, $action]) {
+            $route = Route::getRoutes()->getByName($name);
+
+            expect($route)->not->toBeNull()
+                ->and($route->methods())->toContain($method)
+                ->and($route->getActionName())->toEndWith($action)
+                ->and($route->gatherMiddleware())->toContain('validate.token');
+        }
+    });
+});
+
 describe('Protected Routes and Auth Middleware', function () {
     it('rejects protected route requests without bearer token', function () {
-        $response = getJson('/api/auth/user');
+        $response = getJson(route('auth.user'));
 
         $response->assertStatus(401)
             ->assertJson(['error' => __('http-statuses.401')]);
@@ -67,11 +99,11 @@ describe('Protected Routes and Auth Middleware', function () {
 
     it('rejects protected routes when auth service returns invalid token', function () {
         Http::fake([
-            'https://smartbus-authentication.test/api/tokens/validate' => Http::response([], 401),
+            'https://smartbus-authentication.test/api/token/validate' => Http::response([], 401),
         ]);
 
         $response = withToken('invalid-token')
-            ->getJson('/api/auth/user');
+            ->getJson(route('auth.user'));
 
         $response->assertStatus(401)
             ->assertJson(['message' => __('Invalid or expired token.')]);
@@ -82,12 +114,15 @@ describe('Protected Routes and Auth Middleware', function () {
 
         Http::fake([
             // Token introspection
-            'https://smartbus-authentication.test/api/tokens/validate' => Http::response([
-                'valid' => true,
-                'user_id' => 10,
-                'email' => 'admin@smartbus.com',
-                'roles' => ['admin'],
-                'permissions' => ['manage-users'],
+            'https://smartbus-authentication.test/api/token/validate' => Http::response([
+                'meta' => [
+                    'valid' => true,
+                    'user_id' => 10,
+                    'email' => 'admin@smartbus.com',
+                    'roles' => ['admin'],
+                    'permissions' => ['manage-users'],
+                    'expires_at' => now()->addMinutes(10)->toISOString(),
+                ],
             ], 200),
             // Auth service /user endpoint response
             'https://smartbus-authentication.test/api/user' => Http::response([
@@ -96,7 +131,7 @@ describe('Protected Routes and Auth Middleware', function () {
         ]);
 
         $response = withToken($token)
-            ->getJson('/api/auth/user');
+            ->getJson(route('auth.user'));
 
         $response->assertStatus(200)
             ->assertJsonPath('user.id', 10);
@@ -108,25 +143,28 @@ describe('Gateway Cache and Logout Handling', function () {
         $token = 'cached-token-abc';
 
         Http::fake([
-            'https://smartbus-authentication.test/api/tokens/validate' => Http::response([
-                'valid' => true,
-                'user_id' => 99,
-                'email' => 'cached@example.com',
-                'roles' => ['passenger'],
-                'permissions' => [],
+            'https://smartbus-authentication.test/api/token/validate' => Http::response([
+                'meta' => [
+                    'valid' => true,
+                    'user_id' => 99,
+                    'email' => 'cached@example.com',
+                    'roles' => ['passenger'],
+                    'permissions' => [],
+                    'expires_at' => now()->addMinutes(10)->toISOString(),
+                ],
             ], 200),
             'https://smartbus-authentication.test/api/user' => Http::response([], 200),
         ]);
 
         // First request: Should call the auth service to validate the token
-        withToken($token)->getJson('/api/auth/user');
+        withToken($token)->getJson(route('auth.user'));
 
         // Second request: Should use the cached result and not call the auth service again
-        withToken($token)->getJson('/api/auth/user');
+        withToken($token)->getJson(route('auth.user'));
 
         // Assert: Only one call to the auth service for token validation was made
         Http::assertSent(function ($request) {
-            return $request->url() === 'https://smartbus-authentication.test/api/tokens/validate';
+            return $request->url() === 'https://smartbus-authentication.test/api/token/validate';
         }, 1);
     });
 
@@ -139,19 +177,22 @@ describe('Gateway Cache and Logout Handling', function () {
         expect(Cache::has($cacheKey))->toBeTrue();
 
         Http::fake([
-            'https://smartbus-authentication.test/api/tokens/validate' => Http::response([
-                'valid' => true,
-                'user_id' => 1,
-                'email' => 'test@example.com',
-                'roles' => [],
-                'permissions' => [],
+            'https://smartbus-authentication.test/api/token/validate' => Http::response([
+                'meta' => [
+                    'valid' => true,
+                    'user_id' => 1,
+                    'email' => 'test@example.com',
+                    'roles' => [],
+                    'permissions' => [],
+                    'expires_at' => now()->addMinutes(10)->toISOString(),
+                ],
             ], 200),
             'https://smartbus-authentication.test/api/logout' => Http::response([
                 'message' => __('Session closed successfully.'),
             ], 200),
         ]);
 
-        $response = withToken($token)->postJson('/api/auth/logout');
+        $response = withToken($token)->postJson(route('auth.logout'));
 
         $response->assertStatus(200);
 
@@ -166,7 +207,7 @@ describe('Security Headers Middleware', function () {
             'https://smartbus-authentication.test/api/login' => Http::response([], 200),
         ]);
 
-        $response = postJson('/api/auth/login', [
+        $response = postJson(route('auth.login'), [
             'email' => 'user@example.com',
             'password' => 'password123',
         ]);
@@ -190,7 +231,7 @@ describe('CORS Restrictions', function () {
 
         $response = $this->withHeaders([
             'Origin' => 'https://admin.smartbus.com',
-        ])->postJson('/api/auth/login', [
+        ])->postJson(route('auth.login'), [
             'email' => 'user@example.com',
             'password' => 'password123',
         ]);
@@ -202,7 +243,7 @@ describe('CORS Restrictions', function () {
         // Desactivamos el comodín global del .env para este test específico
         config(['cors.allowed_origins' => ['https://admin.smartbus.com']]);
 
-        $response = $this->flushHeaders()->call('OPTIONS', '/api/auth/login', [], [], [], [
+        $response = $this->flushHeaders()->call('OPTIONS', route('auth.login'), [], [], [], [
             'HTTP_ORIGIN' => 'https://malicious-site.com',
             'HTTP_ACCESS_CONTROL_REQUEST_METHOD' => 'POST',
         ]);
@@ -221,14 +262,14 @@ describe('Rate Limiting', function () {
 
         // Make 60 requests to the login endpoint
         for ($i = 0; $i < 60; $i++) {
-            postJson('/api/auth/login', [
+            postJson(route('auth.login'), [
                 'email' => 'user@example.com',
                 'password' => 'password123',
             ])->assertStatus(200);
         }
 
         // Request number 61 should be blocked by the Rate Limiter
-        $response = postJson('/api/auth/login', [
+        $response = postJson(route('auth.login'), [
             'email' => 'user@example.com',
             'password' => 'password123',
         ]);

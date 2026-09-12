@@ -18,10 +18,6 @@ jobs:
     lint:
         name: Fix Code Style
         runs-on: ubuntu-latest
-        permissions:
-            contents: write
-        outputs:
-            new_sha: ${{ steps.auto-commit.outputs.commit_hash }}
         strategy:
             fail-fast: true
             matrix:
@@ -41,12 +37,6 @@ jobs:
             - name: Run Pint
               run: pint
 
-            - name: Commit linted files
-              id: auto-commit
-              uses: stefanzweifel/git-auto-commit-action@v6
-              with:
-                  commit_message: "chore: fix code style with Laravel Pint"
-
     # ==========================================
     # STEP 2: TESTING (Laravel Pest)
     # ==========================================
@@ -62,7 +52,7 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v6
               with:
-                  ref: ${{ needs.lint.outputs.new_sha || github.head_ref || github.ref }}
+                  ref: ${{ github.head_ref || github.ref }}
 
             # ==========================================
             # STEP 2.1: LARAVEL TESTS (Pest/PHPUnit)
