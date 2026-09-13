@@ -17,26 +17,33 @@ http {
         listen $PORT;
         server_name _;
 
+        # Resolver necesario para que Nginx resuelva dominios externos (Render) dinámicamente
+        resolver 8.8.8.8 1.1.1.1 valid=300s;
+        resolver_timeout 5s;
+
         # 1. Reverse Proxy para WebSockets del Microservicio GPS
         location ~ ^/api/gps/app/(.*)$ {
-            proxy_pass $GPS_SERVICE_URL/app/$1$is_args$args;
+            # Evita concatenar variables en el proxy_pass que rompan el upgrade
+            proxy_pass https://smartbus-gps-tracking.onrender.com/app/$1$is_args$args;
+            
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection $connection_upgrade;
             
-            # Extraer solo el host del dominio remoto para el header Host
             proxy_set_header Host smartbus-gps-tracking.onrender.com;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
-            
+
+            # Desactivar buffering para mantener el canal WebSocket abierto sin interrupciones
+            proxy_buffering off;
             proxy_read_timeout 86400s;
             proxy_send_timeout 86400s;
         }
 
-        # 2. Reverse Proxy para peticiones REST del Microservicio GPS (si el Gateway las reenvía directamente)
+        # 2. Reverse Proxy para peticiones REST del Microservicio GPS
         location /api/gps/ {
-            proxy_pass $GPS_SERVICE_URL/api/gps/;
+            proxy_pass https://smartbus-gps-tracking.onrender.com/api/gps/;
             proxy_set_header Host smartbus-gps-tracking.onrender.com;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
