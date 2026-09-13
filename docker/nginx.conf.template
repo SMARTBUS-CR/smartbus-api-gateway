@@ -17,13 +17,12 @@ http {
         listen $PORT;
         server_name _;
 
-        # Resolver necesario para que Nginx resuelva dominios externos (Render) dinámicamente
+        # Resolver DNS obligatorio para peticiones proxy a dominios externos (Render)
         resolver 8.8.8.8 1.1.1.1 valid=300s;
         resolver_timeout 5s;
 
-        # 1. Reverse Proxy para WebSockets del Microservicio GPS
+        # 1. Rutas WebSockets de Reverb para GPS
         location ~ ^/api/gps/app/(.*)$ {
-            # Evita concatenar variables en el proxy_pass que rompan el upgrade
             proxy_pass https://smartbus-gps-tracking.onrender.com/app/$1$is_args$args;
             
             proxy_http_version 1.1;
@@ -35,22 +34,26 @@ http {
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
 
-            # Desactivar buffering para mantener el canal WebSocket abierto sin interrupciones
             proxy_buffering off;
             proxy_read_timeout 86400s;
             proxy_send_timeout 86400s;
         }
 
-        # 2. Reverse Proxy para peticiones REST del Microservicio GPS
+        # 2. Rutas REST del Microservicio GPS
         location /api/gps/ {
-            proxy_pass https://smartbus-gps-tracking.onrender.com/api/gps/;
+            # Se reescribe la ruta para reenviar limpia al microservicio
+            rewrite ^/api/gps/(.*)$ /api/$1 break;
+            
+            proxy_pass https://smartbus-gps-tracking.onrender.com;
             proxy_set_header Host smartbus-gps-tracking.onrender.com;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
+            
+            proxy_ssl_server_name on; # Importante para la negociación TLS/SSL con Render
         }
 
-        # 3. Solicitudes procesadas localmente por el Laravel API Gateway
+        # 3. Rutas locales del API Gateway (Login, Auth, etc.)
         location / {
             proxy_pass http://127.0.0.1:8000;
             proxy_set_header Host $host;
