@@ -17,13 +17,13 @@ http {
         listen $PORT;
         server_name _;
 
-        # Resolver DNS obligatorio para peticiones proxy a dominios externos (Render)
         resolver 8.8.8.8 1.1.1.1 valid=300s;
         resolver_timeout 5s;
 
-        # 1. Rutas WebSockets de Reverb para GPS
-        location ~ ^/api/gps/app/(.*)$ {
-            proxy_pass https://smartbus-gps-tracking.onrender.com/app/$1$is_args$args;
+        # 1. Captura conexiones WebSocket de Reverb (soporta /api/gps/app/... y /app/...)
+        location ~ ^/(api/gps/)?app/(.*)$ {
+            # Se reescribe para enviar siempre /app/{key} al microservicio GPS en Render
+            proxy_pass https://smartbus-gps-tracking.onrender.com/app/$2$is_args$args;
             
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
@@ -34,6 +34,10 @@ http {
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
 
+            # Handshake SSL necesario para Render
+            proxy_ssl_server_name on;
+
+            # Timeouts extendidos y buffering desactivado para mantener la conexión persistente
             proxy_buffering off;
             proxy_read_timeout 86400s;
             proxy_send_timeout 86400s;
@@ -41,19 +45,18 @@ http {
 
         # 2. Rutas REST del Microservicio GPS
         location /api/gps/ {
-            # Se reescribe la ruta para reenviar limpia al microservicio
-            rewrite ^/api/gps/(.*)$ /api/$1 break;
-            
+            rewrite ^/api/gps/(.*)$ /$1 break;
+
             proxy_pass https://smartbus-gps-tracking.onrender.com;
             proxy_set_header Host smartbus-gps-tracking.onrender.com;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
             
-            proxy_ssl_server_name on; # Importante para la negociación TLS/SSL con Render
+            proxy_ssl_server_name on;
         }
 
-        # 3. Rutas locales del API Gateway (Login, Auth, etc.)
+        # 3. Rutas locales del API Gateway (Laravel)
         location / {
             proxy_pass http://127.0.0.1:8000;
             proxy_set_header Host $host;
