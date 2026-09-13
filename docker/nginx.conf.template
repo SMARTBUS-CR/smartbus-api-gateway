@@ -1,0 +1,55 @@
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+    sendfile        on;
+    keepalive_timeout 65;
+
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
+    server {
+        listen $PORT;
+        server_name _;
+
+        # 1. Reverse Proxy para WebSockets del Microservicio GPS
+        location ~ ^/api/gps/app/(.*)$ {
+            proxy_pass $GPS_SERVICE_URL/app/$1$is_args$args;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            
+            # Extraer solo el host del dominio remoto para el header Host
+            proxy_set_header Host smartbus-gps-tracking.onrender.com;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            
+            proxy_read_timeout 86400s;
+            proxy_send_timeout 86400s;
+        }
+
+        # 2. Reverse Proxy para peticiones REST del Microservicio GPS (si el Gateway las reenvía directamente)
+        location /api/gps/ {
+            proxy_pass $GPS_SERVICE_URL/api/gps/;
+            proxy_set_header Host smartbus-gps-tracking.onrender.com;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+        }
+
+        # 3. Solicitudes procesadas localmente por el Laravel API Gateway
+        location / {
+            proxy_pass http://127.0.0.1:8000;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+}
