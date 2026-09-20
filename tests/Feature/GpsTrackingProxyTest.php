@@ -121,11 +121,11 @@ describe('GPS Auth Guard', function () {
         $response->assertStatus(401)
             ->assertJson(['error' => __('http-statuses.401')]);
     })->with([
-                'store locations' => ['POST', '/api/gps/locations'],
-                'latest for trip' => ['GET', '/api/gps/trips/42/location'],
-                'broadcasting auth POST' => ['POST', '/api/gps/broadcasting/auth'],
-                'broadcasting auth GET' => ['GET', '/api/gps/broadcasting/auth'],
-            ]);
+        'store locations' => ['POST', '/api/gps/locations'],
+        'latest for trip' => ['GET', '/api/gps/trips/42/location'],
+        'broadcasting auth POST' => ['POST', '/api/gps/broadcasting/auth'],
+        'broadcasting auth GET' => ['GET', '/api/gps/broadcasting/auth'],
+    ]);
 
     it('rejects requests with an invalid token without hitting the gps service', function () {
         Http::fake([
