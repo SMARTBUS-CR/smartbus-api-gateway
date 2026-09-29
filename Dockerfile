@@ -1,6 +1,6 @@
 FROM php:8.5-cli-alpine
 
-# Instalar Nginx, Supervisor y dependencias del sistema
+# Install Nginx, Supervisor and system dependencies
 RUN apk add --no-cache \
     supervisor \
     nginx \
@@ -27,24 +27,24 @@ RUN apk add --no-cache \
     bcmath \
     intl
 
-# Copiar Composer desde su imagen oficial
+# Copy Composer from its official image
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-# Optimización de capas de caché de Composer
+# Optimization of Composer cache layers
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
 
-# Copiar el proyecto del API Gateway
+# Copy the API Gateway project
 COPY . .
 RUN composer dump-autoload --optimize
 
-# Permisos requeridos por Laravel
+# Required permissions for Laravel
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Copiar configuraciones y script de inicio
+# Copy configurations and startup script
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/nginx.conf.template /etc/nginx/nginx.conf.template
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh

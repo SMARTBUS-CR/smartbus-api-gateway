@@ -20,9 +20,9 @@ http {
         resolver 8.8.8.8 1.1.1.1 valid=300s;
         resolver_timeout 5s;
 
-        # 1. Captura conexiones WebSocket de Reverb (soporta /api/gps/app/... y /app/...)
+        # Catch Reverb WebSocket connections (supports /api/gps/app/... and /app/...)
         location ~ ^/(api/gps/)?app/(.*)$ {
-            # Se reescribe para enviar siempre /app/{key} al microservicio GPS en Render
+            # Rewrite to always send /app/{key} to the GPS microservice on Render
             proxy_pass ${GPS_SERVICE_URL}/app/$2$is_args$args;
             
             proxy_http_version 1.1;
@@ -34,16 +34,16 @@ http {
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
 
-            # Handshake SSL necesario para Render
+            # SSL Handshake necessary for Render
             proxy_ssl_server_name on;
 
-            # Timeouts extendidos y buffering desactivado para mantener la conexión persistente
+            # Extended timeouts and buffering disabled to maintain persistent connection
             proxy_buffering off;
             proxy_read_timeout 86400s;
             proxy_send_timeout 86400s;
         }
 
-        # 2. Rutas REST del Microservicio GPS
+        # REST API routes for the GPS microservice (supports /api/gps/...)
         location /api/gps/ {
             rewrite ^/api/gps/(.*)$ /$1 break;
 
@@ -56,7 +56,7 @@ http {
             proxy_ssl_server_name on;
         }
 
-        # 3. Rutas locales del API Gateway (Laravel)
+        # Local routes for the API Gateway (Laravel)
         location / {
             proxy_pass http://127.0.0.1:8000;
             proxy_set_header Host $host;
