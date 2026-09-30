@@ -1,8 +1,9 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Auth;
 
 use App\Enums\Services;
+use App\Http\Controllers\Controller;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Dedoc\Scramble\Attributes\Group;
 use Dedoc\Scramble\Attributes\Response as ResponseAttribute;
@@ -22,7 +23,7 @@ class UserPermissionsController extends Controller
     #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, description: 'Unauthenticated.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_FORBIDDEN, description: 'Authorization error.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_NOT_FOUND, description: 'Not found.')]
-    public function permissions(Request $request, int $user): Response
+    public function permissions(Request $request, string $user): Response
     {
         return $this->proxyTo($request, Services::AUTH->value, "users/{$user}/permissions");
     }
@@ -38,7 +39,7 @@ class UserPermissionsController extends Controller
     #[ResponseAttribute(status: HttpStatus::HTTP_FORBIDDEN, description: 'Authorization error.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_NOT_FOUND, description: 'Not found.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_UNPROCESSABLE_ENTITY, description: 'The permission list is invalid.')]
-    public function syncPermissions(Request $request, int $user): Response
+    public function syncPermissions(Request $request, string $user): Response
     {
         return $this->proxyTo($request, Services::AUTH->value, "users/{$user}/permissions");
     }
@@ -52,7 +53,7 @@ class UserPermissionsController extends Controller
     #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, description: 'Unauthenticated.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_FORBIDDEN, description: 'Authorization error.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_NOT_FOUND, description: 'The requested permission was not found.')]
-    public function assignPermission(Request $request, int $user, string $permission): Response
+    public function assignPermission(Request $request, string $user, string $permission): Response
     {
         return $this->proxyTo($request, Services::AUTH->value, "users/{$user}/permissions/{$permission}");
     }
@@ -66,7 +67,7 @@ class UserPermissionsController extends Controller
     #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, description: 'Unauthenticated.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_FORBIDDEN, description: 'Authorization error.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_NOT_FOUND, description: 'The requested permission was not found.')]
-    public function revokePermission(Request $request, int $user, string $permission): Response
+    public function revokePermission(Request $request, string $user, string $permission): Response
     {
         return $this->proxyTo($request, Services::AUTH->value, "users/{$user}/permissions/{$permission}");
     }

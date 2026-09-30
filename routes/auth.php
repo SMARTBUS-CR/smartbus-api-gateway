@@ -1,13 +1,13 @@
 <?php
 
 use App\Enums\Services;
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\PasswordResetController;
-use App\Http\Controllers\PermissionsController;
-use App\Http\Controllers\RolesController;
-use App\Http\Controllers\UserPermissionsController;
-use App\Http\Controllers\UserRolesController;
-use App\Http\Controllers\UsersController;
+use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\Auth\PermissionsController;
+use App\Http\Controllers\Auth\RolesController;
+use App\Http\Controllers\Auth\UserPermissionsController;
+use App\Http\Controllers\Auth\UserRolesController;
+use App\Http\Controllers\Auth\UsersController;
 use Illuminate\Support\Facades\Route;
 
 /**

@@ -1,8 +1,9 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Auth;
 
 use App\Enums\Services;
+use App\Http\Controllers\Controller;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Dedoc\Scramble\Attributes\Group;
 use Dedoc\Scramble\Attributes\Response as ResponseAttribute;
@@ -23,6 +24,8 @@ class PasswordResetController extends Controller
      * For more information about the forgot password endpoint, see the
      * [Forgot Password](https://smartbus-authentication.onrender.com/docs/api#tag/password-reset/POST/password/forgot)
      * section in the Auth microservice documentation.
+     *
+     * @unauthenticated
      *
      * @throws ValidationException
      */
@@ -45,6 +48,8 @@ class PasswordResetController extends Controller
      *
      * For more information about the reset password endpoint, see the
      * [Reset Password](https://smartbus-authentication.onrender.com/docs/api#tag/password-reset/POST/password/reset)
+     *
+     * @unauthenticated
      *
      * @throws ValidationException
      */

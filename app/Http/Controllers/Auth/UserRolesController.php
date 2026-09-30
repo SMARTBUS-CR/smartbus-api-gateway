@@ -1,8 +1,9 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Auth;
 
 use App\Enums\Services;
+use App\Http\Controllers\Controller;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Dedoc\Scramble\Attributes\Group;
 use Dedoc\Scramble\Attributes\QueryParameter;
@@ -24,7 +25,7 @@ class UserRolesController extends Controller
     #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, description: 'Unauthenticated.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_FORBIDDEN, description: 'Authorization error.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_NOT_FOUND, description: 'Not found.')]
-    public function roles(Request $request, int $user): Response
+    public function roles(Request $request, string $user): Response
     {
         return $this->proxyTo($request, Services::AUTH->value, "users/{$user}/roles");
     }
@@ -41,7 +42,7 @@ class UserRolesController extends Controller
     #[ResponseAttribute(status: HttpStatus::HTTP_FORBIDDEN, description: 'Authorization error.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_NOT_FOUND, description: 'Not found.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_UNPROCESSABLE_ENTITY, description: 'The role list is invalid.')]
-    public function syncRoles(Request $request, int $user): Response
+    public function syncRoles(Request $request, string $user): Response
     {
         return $this->proxyTo($request, Services::AUTH->value, "users/{$user}/roles");
     }
@@ -57,7 +58,7 @@ class UserRolesController extends Controller
     #[ResponseAttribute(status: HttpStatus::HTTP_FORBIDDEN, description: 'Authorization error.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_NOT_FOUND, description: 'Not found.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_UNPROCESSABLE_ENTITY, description: 'The requested role is invalid.')]
-    public function assignRole(Request $request, int $user, string $role): Response
+    public function assignRole(Request $request, string $user, string $role): Response
     {
         return $this->proxyTo($request, Services::AUTH->value, "users/{$user}/roles/{$role}");
     }
@@ -73,7 +74,7 @@ class UserRolesController extends Controller
     #[ResponseAttribute(status: HttpStatus::HTTP_NOT_FOUND, description: 'Not found.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_CONFLICT, description: 'The revocation violates an administrator safety rule.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_UNPROCESSABLE_ENTITY, description: 'Validation error.')]
-    public function revokeRole(Request $request, int $user, string $role): Response
+    public function revokeRole(Request $request, string $user, string $role): Response
     {
         return $this->proxyTo($request, Services::AUTH->value, "users/{$user}/roles/{$role}");
     }

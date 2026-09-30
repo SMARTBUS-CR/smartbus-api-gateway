@@ -1,10 +1,12 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Auth;
 
 use App\Enums\Services;
+use App\Http\Controllers\Controller;
 use Dedoc\Scramble\Attributes\BodyParameter;
 use Dedoc\Scramble\Attributes\Group;
+use Dedoc\Scramble\Attributes\HeaderParameter;
 use Dedoc\Scramble\Attributes\QueryParameter;
 use Dedoc\Scramble\Attributes\Response as ResponseAttribute;
 use Illuminate\Http\Request;
@@ -75,7 +77,7 @@ class UsersController extends Controller
     #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, description: 'Unauthenticated.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_FORBIDDEN, description: 'Authorization error.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_NOT_FOUND, description: 'The requested user was not found.')]
-    public function show(Request $request, int $user): Response
+    public function show(Request $request, string $user): Response
     {
         return $this->proxyTo($request, Services::AUTH->value, "users/{$user}");
     }
@@ -98,7 +100,7 @@ class UsersController extends Controller
     #[ResponseAttribute(status: HttpStatus::HTTP_FORBIDDEN, description: 'Authorization error.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_NOT_FOUND, description: 'Not found.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_UNPROCESSABLE_ENTITY, description: 'The user data is invalid.')]
-    public function update(Request $request, int $user): Response
+    public function update(Request $request, string $user): Response
     {
         return $this->proxyTo($request, Services::AUTH->value, "users/{$user}");
     }
@@ -115,7 +117,7 @@ class UsersController extends Controller
     #[ResponseAttribute(status: HttpStatus::HTTP_FORBIDDEN, description: 'Authorization error.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_NOT_FOUND, description: 'Not found.')]
     #[ResponseAttribute(status: HttpStatus::HTTP_CONFLICT, description: 'The deletion violates a user safety rule.')]
-    public function destroy(Request $request, int $user): Response
+    public function destroy(Request $request, string $user): Response
     {
         return $this->proxyTo($request, Services::AUTH->value, "users/{$user}");
     }
