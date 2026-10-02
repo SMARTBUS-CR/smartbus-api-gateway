@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Response as HttpStatus;
 
-#[Group('Auth Service - Email Verification', 'Endpoints for email verification within the authentication service.', weight: 2)]
+#[Group(Services::AUTH_LABEL)]
 class EmailVerificationController extends Controller
 {
     /**

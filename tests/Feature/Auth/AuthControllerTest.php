@@ -15,7 +15,11 @@ beforeEach(function () {
 describe('Public Authentication', function () {
     it('proxies login to the auth service', function () {
         Http::fake([
-            AUTH_SERVICE_URL.'/api/login' => Http::response(['access_token' => 'fake-token-123'], 200),
+            AUTH_SERVICE_URL.'/api/login' => Http::response(
+                '{"access_token":"fake-token-123"}',
+                200,
+                ['Content-Type' => 'application/vnd.api+json'],
+            ),
         ]);
 
         $response = postJson(route('auth.login'), [
@@ -23,7 +27,9 @@ describe('Public Authentication', function () {
             'password' => 'password123',
         ]);
 
-        $response->assertOk()->assertJson(['access_token' => 'fake-token-123']);
+        $response->assertOk()
+            ->assertHeader('Content-Type', 'application/vnd.api+json')
+            ->assertJson(['access_token' => 'fake-token-123']);
         Http::assertSent(fn ($request) => $request->url() === AUTH_SERVICE_URL.'/api/login'
             && $request['email'] === TEST_EMAIL);
     });
@@ -62,6 +68,18 @@ describe('Authenticated Authentication', function () {
             ->assertJson(['message' => __('Invalid or expired token.')]);
     });
 
+    it('proxies token validation only once', function () {
+        Http::fake([
+            AUTH_SERVICE_URL.'/api/token/validate' => Http::response(authTokenMeta(), 200),
+        ]);
+
+        withToken(TEST_TOKEN)->postJson(route('auth.token.validate'))
+            ->assertOk();
+
+        expect(Http::recorded(fn ($request) => $request->url() === AUTH_SERVICE_URL.'/api/token/validate'))
+            ->toHaveCount(1);
+    });
+
     it('proxies the authenticated user after validating the token', function () {
         Http::fake([
             AUTH_SERVICE_URL.'/api/token/validate' => Http::response(authTokenMeta(), 200),
@@ -82,7 +100,8 @@ describe('Authenticated Authentication', function () {
         withToken(TEST_TOKEN)->getJson(route('auth.user'));
         withToken(TEST_TOKEN)->getJson(route('auth.user'));
 
-        Http::assertSent(fn ($request) => $request->url() === AUTH_SERVICE_URL.'/api/token/validate', 1);
+        expect(Http::recorded(fn ($request) => $request->url() === AUTH_SERVICE_URL.'/api/token/validate'))
+            ->toHaveCount(1);
     });
 
     it('clears cached token validation after a successful logout', function () {
