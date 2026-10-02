@@ -1,7 +1,15 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
+
+const AUTH_SERVICE_URL = 'https://smartbus-authentication.test';
+const GPS_SERVICE_URL = 'https://smartbus-gps-tracking.test';
+const TEST_EMAIL = 'user@example.com';
+const TEST_TOKEN = 'valid-sanctum-token';
+
+beforeEach(Http::preventStrayRequests(...));
 
 /*
 |--------------------------------------------------------------------------
@@ -44,7 +52,23 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Returns a mock response for a valid auth token.
+ *
+ * @param  array  $overrides  Optional overrides for the default meta values.
+ * @return array The mock response data.
+ */
+function authTokenMeta(array $overrides = []): array
 {
-    // ..
+    return [
+        'meta' => [
+            'valid' => true,
+            'user_id' => 10,
+            'email' => 'admin@smartbus.com',
+            'roles' => ['admin'],
+            'permissions' => ['manage-users'],
+            'expires_at' => now()->addMinutes(10)->toISOString(),
+            ...$overrides,
+        ],
+    ];
 }
