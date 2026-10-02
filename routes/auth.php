@@ -2,6 +2,7 @@
 
 use App\Enums\Services;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\PermissionsController;
 use App\Http\Controllers\Auth\RolesController;
@@ -26,6 +27,12 @@ Route::prefix(Services::AUTH->value)->group(function () {
     Route::prefix('password')->controller(PasswordResetController::class)->group(function () {
         Route::post('forgot', 'sendResetCode')->name('auth.password.forgot');
         Route::post('reset', 'resetPassword')->name('auth.password.reset');
+    });
+
+    // Email Verification routes for the Authentication service
+    Route::prefix('email')->controller(EmailVerificationController::class)->group(function () {
+        Route::post('verify', 'verify')->name('auth.email.verify');
+        Route::post('resend', 'resend')->name('auth.email.resend');
     });
 
     // Administrative Routes for the Authentication service
