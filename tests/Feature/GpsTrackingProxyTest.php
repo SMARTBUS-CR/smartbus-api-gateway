@@ -8,6 +8,9 @@ use function Pest\Laravel\getJson;
 use function Pest\Laravel\postJson;
 use function Pest\Laravel\withToken;
 
+const GPS_TRIP_ID = '01a09332-3457-7315-885e-4ebb218f7262';
+const GPS_OTHER_TRIP_ID = '01a09332-3457-7315-885e-4ebb218f7299';
+
 beforeEach(function () {
     config([
         'smartbus.auth.url' => 'https://smartbus-authentication.test',
@@ -22,7 +25,7 @@ function gpsTokenMeta(): array
     return [
         'meta' => [
             'valid' => true,
-            'user_id' => 10,
+            'user_id' => '01a09332-0000-7315-885e-4ebb218f7262',
             'email' => 'driver@smartbus.com',
             'roles' => ['driver'],
             'permissions' => [],
@@ -31,12 +34,12 @@ function gpsTokenMeta(): array
     ];
 }
 
-function gpsLocationResource(int $tripId = 42, int $id = 1): array
+function gpsLocationResource(string $tripId = GPS_TRIP_ID, string $id = '01a0a1f0-9c2e-7b3a-8f41-2d6e5c7b9a10'): array
 {
     return [
         'data' => [
             'type' => 'gps-locations',
-            'id' => (string) $id,
+            'id' => $id,
             'attributes' => [
                 'trip_id' => $tripId,
                 'latitude' => 10.4631,
@@ -46,18 +49,18 @@ function gpsLocationResource(int $tripId = 42, int $id = 1): array
             ],
             'relationships' => [
                 'trip' => [
-                    'data' => ['type' => 'trips', 'id' => (string) $tripId],
+                    'data' => ['type' => 'trips', 'id' => $tripId],
                 ],
             ],
         ],
         'included' => [
             [
                 'type' => 'trips',
-                'id' => (string) $tripId,
+                'id' => $tripId,
                 'attributes' => [
-                    'route_id' => 5,
-                    'bus_id' => 7,
-                    'driver_id' => 'driver-uuid-1',
+                    'route_id' => '01a09332-1111-7315-885e-4ebb218f7262',
+                    'bus_id' => '01a09332-2222-7315-885e-4ebb218f7262',
+                    'driver_id' => '01a09332-3333-7315-885e-4ebb218f7262',
                     'status' => 'in_progress',
                     'started_at' => '2026-09-03T14:00:00.000000Z',
                 ],
@@ -66,7 +69,7 @@ function gpsLocationResource(int $tripId = 42, int $id = 1): array
     ];
 }
 
-function gpsStorePayload(int $tripId = 42): array
+function gpsStorePayload(string $tripId = GPS_TRIP_ID): array
 {
     return [
         'data' => [
@@ -104,10 +107,10 @@ describe('GPS Routes Registration', function () {
         }
     });
 
-    it('constrains the tripId parameter to numbers', function () {
+    it('constrains the tripId parameter to UUIDs', function () {
         $route = Route::getRoutes()->getByName('gps.trips.location');
 
-        expect($route->wheres)->toMatchArray(['tripId' => '[0-9]+']);
+        expect($route->wheres)->toMatchArray(['tripId' => '[\da-fA-F]{8}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{12}']);
     });
 });
 
@@ -122,7 +125,7 @@ describe('GPS Auth Guard', function () {
             ->assertJson(['error' => __('http-statuses.401')]);
     })->with([
         'store locations' => ['POST', '/api/gps/locations'],
-        'latest for trip' => ['GET', '/api/gps/trips/42/location'],
+        'latest for trip' => ['GET', '/api/gps/trips/'.GPS_TRIP_ID.'/location'],
         'broadcasting auth POST' => ['POST', '/api/gps/broadcasting/auth'],
         'broadcasting auth GET' => ['GET', '/api/gps/broadcasting/auth'],
     ]);
@@ -146,21 +149,21 @@ describe('POST store', function () {
 
         Http::fake([
             'https://smartbus-authentication.test/api/token/validate' => Http::response(gpsTokenMeta(), 200),
-            'https://smartbus-gps-tracking.test/api/locations' => Http::response(gpsLocationResource(42), 201),
+            'https://smartbus-gps-tracking.test/api/locations' => Http::response(gpsLocationResource(GPS_TRIP_ID), 201),
         ]);
 
-        $response = withToken($token)->postJson(route('gps.locations.store'), gpsStorePayload(42));
+        $response = withToken($token)->postJson(route('gps.locations.store'), gpsStorePayload(GPS_TRIP_ID));
 
         $response->assertStatus(201)
             ->assertHeader('Content-Type', 'application/json')
             ->assertJsonPath('data.type', 'gps-locations')
-            ->assertJsonPath('data.attributes.trip_id', 42)
-            ->assertJsonPath('data.relationships.trip.data.id', '42')
+            ->assertJsonPath('data.attributes.trip_id', GPS_TRIP_ID)
+            ->assertJsonPath('data.relationships.trip.data.id', GPS_TRIP_ID)
             ->assertJsonPath('included.0.type', 'trips');
 
         Http::assertSent(fn ($request) => $request->url() === 'https://smartbus-gps-tracking.test/api/locations'
             && $request->method() === 'POST'
-            && $request['data']['attributes']['trip_id'] === 42
+            && $request['data']['attributes']['trip_id'] === GPS_TRIP_ID
             && ($request->header('Authorization')[0] ?? null) === "Bearer {$token}");
     });
 
@@ -209,34 +212,35 @@ describe('GET latestForTrip', function () {
     it('proxies latest position', function () {
         Http::fake([
             'https://smartbus-authentication.test/api/token/validate' => Http::response(gpsTokenMeta(), 200),
-            'https://smartbus-gps-tracking.test/api/trips/42/location' => Http::response(gpsLocationResource(42), 200),
+            'https://smartbus-gps-tracking.test/api/trips/'.GPS_TRIP_ID.'/location' => Http::response(gpsLocationResource(GPS_TRIP_ID), 200),
         ]);
 
         withToken('p-token')
-            ->getJson(route('gps.trips.location', ['tripId' => 42]))
+            ->getJson(route('gps.trips.location', ['tripId' => GPS_TRIP_ID]))
             ->assertStatus(200)
-            ->assertJsonPath('data.attributes.trip_id', 42);
+            ->assertJsonPath('data.attributes.trip_id', GPS_TRIP_ID);
 
-        Http::assertSent(fn ($r) => $r->url() === 'https://smartbus-gps-tracking.test/api/trips/42/location');
+        Http::assertSent(fn ($r) => $r->url() === 'https://smartbus-gps-tracking.test/api/trips/'.GPS_TRIP_ID.'/location');
     });
 
     it('forwards 404 when no readings', function () {
         Http::fake([
             'https://smartbus-authentication.test/api/token/validate' => Http::response(gpsTokenMeta(), 200),
-            'https://smartbus-gps-tracking.test/api/trips/99/location' => Http::response(['message' => 'No location'], 404),
+            'https://smartbus-gps-tracking.test/api/trips/'.GPS_OTHER_TRIP_ID.'/location' => Http::response(['message' => 'No location'], 404),
         ]);
 
         withToken('p-token')
-            ->getJson(route('gps.trips.location', ['tripId' => 99]))
+            ->getJson(route('gps.trips.location', ['tripId' => GPS_OTHER_TRIP_ID]))
             ->assertStatus(404);
     });
 
-    it('rejects non-numeric tripId without calling the gps service', function () {
+    it('rejects non-UUID tripId without calling the gps service', function () {
         Http::fake([
             'https://smartbus-authentication.test/api/token/validate' => Http::response(gpsTokenMeta(), 200),
         ]);
 
         withToken('p-token')->getJson('/api/gps/trips/abc/location')->assertStatus(404);
+        withToken('p-token')->getJson('/api/gps/trips/42/location')->assertStatus(404);
 
         Http::assertNotSent(fn ($r) => str_starts_with($r->url(), 'https://smartbus-gps-tracking.test/api/trips/'));
     });
@@ -244,21 +248,21 @@ describe('GET latestForTrip', function () {
     it('forwards query string to the gps service', function () {
         Http::fake([
             'https://smartbus-authentication.test/api/token/validate' => Http::response(gpsTokenMeta(), 200),
-            'https://smartbus-gps-tracking.test/api/trips/42/location*' => Http::response(gpsLocationResource(42), 200),
+            'https://smartbus-gps-tracking.test/api/trips/'.GPS_TRIP_ID.'/location*' => Http::response(gpsLocationResource(GPS_TRIP_ID), 200),
         ]);
 
         withToken('p-token')
-            ->getJson(route('gps.trips.location', ['tripId' => 42]).'?include=trip')
+            ->getJson(route('gps.trips.location', ['tripId' => GPS_TRIP_ID]).'?include=trip')
             ->assertStatus(200);
 
         Http::assertSent(function ($request) {
-            return str_starts_with($request->url(), 'https://smartbus-gps-tracking.test/api/trips/42/location')
+            return str_starts_with($request->url(), 'https://smartbus-gps-tracking.test/api/trips/'.GPS_TRIP_ID.'/location')
                 && str_contains($request->url(), 'include=trip');
         });
     });
 
     it('rejects unauthenticated requests without calling the gps service', function () {
-        getJson(route('gps.trips.location', ['tripId' => 42]))
+        getJson(route('gps.trips.location', ['tripId' => GPS_TRIP_ID]))
             ->assertStatus(401)
             ->assertJson(['error' => __('http-statuses.401')]);
 
@@ -271,7 +275,7 @@ describe('GET latestForTrip', function () {
         ]);
 
         withToken('invalid-token')
-            ->getJson(route('gps.trips.location', ['tripId' => 42]))
+            ->getJson(route('gps.trips.location', ['tripId' => GPS_TRIP_ID]))
             ->assertStatus(401)
             ->assertJson(['message' => __('Invalid or expired token.')]);
 
@@ -281,11 +285,11 @@ describe('GET latestForTrip', function () {
     it('forwards upstream 500 errors from the gps service', function () {
         Http::fake([
             'https://smartbus-authentication.test/api/token/validate' => Http::response(gpsTokenMeta(), 200),
-            'https://smartbus-gps-tracking.test/api/trips/42/location' => Http::response(['errors' => [['title' => 'Server Error']]], 500),
+            'https://smartbus-gps-tracking.test/api/trips/'.GPS_TRIP_ID.'/location' => Http::response(['errors' => [['title' => 'Server Error']]], 500),
         ]);
 
         withToken('p-token')
-            ->getJson(route('gps.trips.location', ['tripId' => 42]))
+            ->getJson(route('gps.trips.location', ['tripId' => GPS_TRIP_ID]))
             ->assertStatus(500);
     });
 
@@ -297,7 +301,7 @@ describe('GET latestForTrip', function () {
         ]);
 
         withToken('stale-token')
-            ->getJson(route('gps.trips.location', ['tripId' => 42]))
+            ->getJson(route('gps.trips.location', ['tripId' => GPS_TRIP_ID]))
             ->assertStatus(401)
             ->assertJson(['message' => __('Invalid or expired token.')]);
 
@@ -310,7 +314,7 @@ describe('GET latestForTrip', function () {
         ]);
 
         withToken('p-token')
-            ->getJson(route('gps.trips.location', ['tripId' => 42]))
+            ->getJson(route('gps.trips.location', ['tripId' => GPS_TRIP_ID]))
             ->assertStatus(401);
 
         Http::assertNotSent(fn ($request) => str_starts_with($request->url(), 'https://smartbus-gps-tracking.test/api/'));
@@ -325,13 +329,34 @@ describe('broadcasting/auth proxy', function () {
         ]);
 
         withToken('p-token')
-            ->postJson(route('gps.broadcasting.auth'), ['socket_id' => '1.1', 'channel_name' => 'private-trip.42'])
+            ->postJson(route('gps.broadcasting.auth'), ['socket_id' => '1.1', 'channel_name' => 'private-trip.'.GPS_TRIP_ID])
             ->assertStatus(200)->assertJson(['auth' => 'KEY:sig']);
 
         Http::assertSent(function ($request) {
             return $request->url() === 'https://smartbus-gps-tracking.test/api/broadcasting/auth'
                 && $request->method() === 'POST'
-                && $request['channel_name'] === 'private-trip.42';
+                && $request['channel_name'] === 'private-trip.'.GPS_TRIP_ID;
+        });
+    });
+
+    it('converts the form-urlencoded auth payload (Laravel Echo default) into JSON', function () {
+        Http::fake([
+            'https://smartbus-authentication.test/api/token/validate' => Http::response(gpsTokenMeta(), 200),
+            'https://smartbus-gps-tracking.test/api/broadcasting/auth' => Http::response(['auth' => 'KEY:sig'], 200),
+        ]);
+
+        withToken('p-token')
+            ->post(route('gps.broadcasting.auth'), ['socket_id' => '1.1', 'channel_name' => 'private-trip.'.GPS_TRIP_ID], [
+                'Accept' => 'application/json',
+            ])
+            ->assertStatus(200)->assertJson(['auth' => 'KEY:sig']);
+
+        Http::assertSent(function ($request) {
+            return $request->url() === 'https://smartbus-gps-tracking.test/api/broadcasting/auth'
+                && $request->isJson()
+                && $request['socket_id'] === '1.1'
+                && $request['channel_name'] === 'private-trip.'.GPS_TRIP_ID
+                && ($request->header('Authorization')[0] ?? null) === 'Bearer p-token';
         });
     });
 
@@ -342,7 +367,7 @@ describe('broadcasting/auth proxy', function () {
         ]);
 
         withToken('p-token')
-            ->getJson(route('gps.broadcasting.auth', ['socket_id' => '1.1', 'channel_name' => 'private-trip.42']))
+            ->getJson(route('gps.broadcasting.auth', ['socket_id' => '1.1', 'channel_name' => 'private-trip.'.GPS_TRIP_ID]))
             ->assertStatus(200)
             ->assertJson(['auth' => 'KEY:sig']);
     });
@@ -354,12 +379,12 @@ describe('broadcasting/auth proxy', function () {
         ]);
 
         withToken('p-token')
-            ->postJson(route('gps.broadcasting.auth'), ['socket_id' => '1.1', 'channel_name' => 'private-trip.999'])
+            ->postJson(route('gps.broadcasting.auth'), ['socket_id' => '1.1', 'channel_name' => 'private-trip.'.GPS_OTHER_TRIP_ID])
             ->assertStatus(403);
     });
 
     it('rejects unauthenticated broadcasting/auth without calling the gps service', function () {
-        postJson(route('gps.broadcasting.auth'), ['socket_id' => '1.1', 'channel_name' => 'private-trip.42'])
+        postJson(route('gps.broadcasting.auth'), ['socket_id' => '1.1', 'channel_name' => 'private-trip.'.GPS_TRIP_ID])
             ->assertStatus(401);
 
         getJson(route('gps.broadcasting.auth'))

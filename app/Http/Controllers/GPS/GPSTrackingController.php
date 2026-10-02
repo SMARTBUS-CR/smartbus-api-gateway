@@ -12,6 +12,7 @@ use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\InputBag;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Response as HttpStatus;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -35,12 +36,12 @@ class GPSTrackingController extends Controller
     #[BodyParameter('data', type: 'array', required: true, description: 'The GPS location data to be stored.')]
     #[BodyParameter('data.type', type: 'string', required: true, description: 'The type of the GPS location data.')]
     #[BodyParameter('data.attributes', type: 'object', required: true, description: 'The attributes of the GPS location data.')]
-    #[BodyParameter('data.attributes.trip_id', type: 'int', required: true, description: 'The ID of the trip associated with the GPS location data.', example: 42)]
+    #[BodyParameter('data.attributes.trip_id', type: 'string', format: 'uuid', required: true, description: 'The UUID of the trip associated with the GPS location data.', example: '01a09332-3457-7315-885e-4ebb218f7262')]
     #[BodyParameter('data.attributes.latitude', type: 'numeric', required: true, description: 'The latitude of the GPS location data.', example: 42.123456)]
     #[BodyParameter('data.attributes.longitude', type: 'numeric', required: true, description: 'The longitude of the GPS location data.', example: -71.123456)]
     #[BodyParameter('data.attributes.speed_kmh', type: 'numeric', required: false, description: 'Registered speed in km/h (0 - 400).', example: 45.5)]
     #[BodyParameter('data.attributes.recorded_at', type: 'string', required: true, description: 'The timestamp of when the GPS location data was recorded (ISO 8601 Format).', example: '2026-09-12T23:30:00Z')]
-    #[ResponseAttribute(status: HttpStatus::HTTP_CREATED, type: 'array{data: array{id: string, type: string, attributes: array{trip_id: int, latitude: float, longitude: float, speed_kmh: float|null, recorded_at: string}, relationships: array{trip: array{data: array{id: string, type: string}}}}, included: array<int, array{id: string, type: string, attributes: array{route_id: int, bus_id: int, driver_id: string, status: string, started_at: string|null}}>}')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_CREATED, type: 'array{data: array{id: string, type: string, attributes: array{trip_id: string, latitude: float, longitude: float, speed_kmh: float|null, recorded_at: string}, relationships: array{trip: array{data: array{id: string, type: string}}}}, included: array<int, array{id: string, type: string, attributes: array{route_id: string, bus_id: string, driver_id: string, status: string, started_at: string|null}}>}')]
     #[ResponseAttribute(status: HttpStatus::HTTP_ACCEPTED, type: 'array{meta: array{persisted: bool}}')]
     public function store(Request $request): Response
     {
@@ -74,7 +75,7 @@ class GPSTrackingController extends Controller
          *         id: string,
          *         type: string,
          *         attributes: array{
-         *             trip_id: int,
+         *             trip_id: string,
          *             latitude: float,
          *             longitude: float,
          *             speed_kmh: float|null,
@@ -93,8 +94,8 @@ class GPSTrackingController extends Controller
          *         id: string,
          *         type: string,
          *         attributes: array{
-         *             route_id: int,
-         *             bus_id: int,
+         *             route_id: string,
+         *             bus_id: string,
          *             driver_id: string,
          *             status: string,
          *             started_at: string|null
@@ -128,12 +129,19 @@ class GPSTrackingController extends Controller
      * @throws HttpException An HttpException is thrown for any other HTTP-related errors that may occur during the request processing.
      */
     #[BodyParameter('socket_id', type: 'string', required: true, description: 'The socket ID for the WebSocket (Reverb/Pusher) connection.', example: '12345.67890')]
-    #[BodyParameter('channel_name', type: 'string', required: true, description: 'The name of the private channel to which the user is subscribing.', example: 'private-trip.1')]
+    #[BodyParameter('channel_name', type: 'string', required: true, description: 'The name of the private channel to which the user is subscribing.', example: 'private-trip.01a09332-3457-7315-885e-4ebb218f7262')]
     #[ResponseAttribute(status: HttpStatus::HTTP_OK, type: 'array{auth: string}', examples: ['{"auth": "REVERB_APP_KEY:df89a1b2c3d4e5f6..."}'])]
     #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, type: 'array{message: string}', examples: ['{"message": "Unauthenticated."}'])]
     #[ResponseAttribute(status: HttpStatus::HTTP_FORBIDDEN, type: 'array{message: string}', examples: ['{"message": "Access denied to channel."}'])]
     public function authenticateBroadcast(Request $request): Response
     {
+        // Laravel Echo / Pusher sends `socket_id` and `channel_name` as application/x-www-form-urlencoded,
+        // but proxyTo() only forwards JSON bodies. Convert the form into JSON so they reach the GPS service.
+        if (! $request->isJson() && $request->request->count() > 0) {
+            $request->setJson(new InputBag($request->request->all()));
+            $request->headers->set('Content-Type', 'application/json');
+        }
+
         return $this->proxyTo(
             $request,
             Services::GPS->value,
