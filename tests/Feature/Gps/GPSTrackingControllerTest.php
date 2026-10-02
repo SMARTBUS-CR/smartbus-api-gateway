@@ -6,6 +6,9 @@ use Illuminate\Support\Facades\Route;
 
 use function Pest\Laravel\withToken;
 
+const GPS_TRIP_ID = '01a09332-3457-7315-885e-4ebb218f7262';
+const GPS_OTHER_TRIP_ID = '01a09332-3457-7315-885e-4ebb218f7299';
+
 beforeEach(function () {
     config([
         'smartbus.auth.url' => AUTH_SERVICE_URL,
@@ -15,7 +18,7 @@ beforeEach(function () {
     Cache::flush();
 });
 
-function gpsPayload(int $tripId = 42): array
+function gpsPayload(string $tripId = GPS_TRIP_ID): array
 {
     return [
         'data' => [
@@ -31,7 +34,7 @@ function gpsPayload(int $tripId = 42): array
     ];
 }
 
-function gpsResponse(int $tripId = 42): array
+function gpsResponse(string $tripId = GPS_TRIP_ID): array
 {
     return [
         'data' => [
@@ -44,11 +47,11 @@ function gpsResponse(int $tripId = 42): array
 }
 
 describe('GPS Route Registration', function () {
-    it('registers GPS routes with numeric trip constraints and token validation', function () {
+    it('registers GPS routes with UUID trip constraints and token validation', function () {
         $route = Route::getRoutes()->getByName('gps.trips.location');
 
         expect($route)->not->toBeNull()
-            ->and($route->wheres)->toMatchArray(['tripId' => '[0-9]+'])
+            ->and($route->wheres)->toMatchArray(['tripId' => '[\da-fA-F]{8}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{4}-[\da-fA-F]{12}'])
             ->and($route->gatherMiddleware())->toContain('validate.token');
     });
 });
@@ -60,7 +63,7 @@ describe('GPS Authentication', function () {
             ->assertJson(['error' => __('http-statuses.401')]);
     })->with([
         'store' => ['POST', 'gps.locations.store', []],
-        'latest location' => ['GET', 'gps.trips.location', ['tripId' => 42]],
+        'latest location' => ['GET', 'gps.trips.location', ['tripId' => GPS_TRIP_ID]],
         'broadcast GET' => ['GET', 'gps.broadcasting.auth', []],
         'broadcast POST' => ['POST', 'gps.broadcasting.auth', []],
     ]);
@@ -76,11 +79,11 @@ describe('GPS Location Proxy', function () {
         withToken('driver-token')->postJson(route('gps.locations.store'), gpsPayload())
             ->assertCreated()
             ->assertJsonPath('data.type', 'gps-locations')
-            ->assertJsonPath('data.attributes.trip_id', 42);
+            ->assertJsonPath('data.attributes.trip_id', GPS_TRIP_ID);
 
         Http::assertSent(fn ($request) => $request->url() === GPS_SERVICE_URL.'/api/locations'
             && $request->method() === 'POST'
-            && $request['data']['attributes']['trip_id'] === 42);
+            && $request['data']['attributes']['trip_id'] === GPS_TRIP_ID);
     });
 
     it('forwards GPS accepted and error responses', function (int $status, array $body) {
@@ -103,29 +106,30 @@ describe('Latest Location Proxy', function () {
     it('proxies the latest trip location and query string', function () {
         Http::fake([
             AUTH_SERVICE_URL.'/api/token/validate' => Http::response(authTokenMeta(), 200),
-            GPS_SERVICE_URL.'/api/trips/42/location*' => Http::response(gpsResponse(), 200),
+            GPS_SERVICE_URL.'/api/trips/'.GPS_TRIP_ID.'/location*' => Http::response(gpsResponse(), 200),
         ]);
 
-        withToken('driver-token')->getJson(route('gps.trips.location', ['tripId' => 42]).'?include=trip')
+        withToken('driver-token')->getJson(route('gps.trips.location', ['tripId' => GPS_TRIP_ID]).'?include=trip')
             ->assertOk()
-            ->assertJsonPath('data.attributes.trip_id', 42);
+            ->assertJsonPath('data.attributes.trip_id', GPS_TRIP_ID);
 
-        Http::assertSent(fn ($request) => str_contains($request->url(), '/api/trips/42/location?include=trip'));
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/api/trips/'.GPS_TRIP_ID.'/location?include=trip'));
     });
 
-    it('returns 404 for non-numeric trip IDs without calling GPS', function () {
+    it('returns 404 for non-UUID trip IDs without calling GPS', function () {
         Http::fake([
             AUTH_SERVICE_URL.'/api/token/validate' => Http::response(authTokenMeta(), 200),
         ]);
 
         withToken('driver-token')->getJson('/api/gps/trips/abc/location')->assertNotFound();
+        withToken('driver-token')->getJson('/api/gps/trips/42/location')->assertNotFound();
         Http::assertNotSent(fn ($request) => str_starts_with($request->url(), GPS_SERVICE_URL.'/api/'));
     });
 
     it('returns 401 when auth validation fails or is unavailable without calling GPS', function (callable $fake) {
         Http::fake($fake);
 
-        withToken('driver-token')->getJson(route('gps.trips.location', ['tripId' => 42]))
+        withToken('driver-token')->getJson(route('gps.trips.location', ['tripId' => GPS_TRIP_ID]))
             ->assertUnauthorized();
 
         Http::assertNotSent(fn ($request) => str_starts_with($request->url(), GPS_SERVICE_URL.'/api/'));
@@ -149,8 +153,29 @@ describe('Broadcasting Authentication Proxy', function () {
         ])->json($method, route('gps.broadcasting.auth'), $payload);
         $response->assertStatus($status);
     })->with([
-        'POST success' => ['POST', ['socket_id' => '1.1', 'channel_name' => 'private-trip.42'], 200],
+        'POST success' => ['POST', ['socket_id' => '1.1', 'channel_name' => 'private-trip.'.GPS_TRIP_ID], 200],
         'GET success' => ['GET', [], 200],
-        'POST denied' => ['POST', ['socket_id' => '1.1', 'channel_name' => 'private-trip.999'], 403],
+        'POST denied' => ['POST', ['socket_id' => '1.1', 'channel_name' => 'private-trip.'.GPS_OTHER_TRIP_ID], 403],
     ]);
+
+    it('converts form-urlencoded auth payloads into JSON for the GPS service', function () {
+        Http::fake([
+            AUTH_SERVICE_URL.'/api/token/validate' => Http::response(authTokenMeta(), 200),
+            GPS_SERVICE_URL.'/api/broadcasting/auth' => Http::response(['auth' => 'KEY:sig'], 200),
+        ]);
+
+        withToken('driver-token')
+            ->post(route('gps.broadcasting.auth'), [
+                'socket_id' => '1.1',
+                'channel_name' => 'private-trip.'.GPS_TRIP_ID,
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJson(['auth' => 'KEY:sig']);
+
+        Http::assertSent(fn ($request) => $request->url() === GPS_SERVICE_URL.'/api/broadcasting/auth'
+            && $request->isJson()
+            && $request['socket_id'] === '1.1'
+            && $request['channel_name'] === 'private-trip.'.GPS_TRIP_ID
+            && ($request->header('Authorization')[0] ?? null) === 'Bearer driver-token');
+    });
 });
