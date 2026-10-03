@@ -17,8 +17,6 @@ class RolesController extends Controller
      * List Roles
      *
      * Lists the roles supported by the application.
-     *
-     * @authenticate
      */
     #[QueryParameter('fields[roles]', type: 'array<string>', infer: false)]
     #[ResponseAttribute(status: Response::HTTP_OK, description: 'Available roles returned successfully.', mediaType: 'application/vnd.api+json', type: 'array{data: array<int, array{type: string, id: string, attributes: array<string, mixed>}}')]

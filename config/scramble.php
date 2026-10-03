@@ -117,9 +117,7 @@ return [
             'Production' => 'https://smartbus-api-gateway.onrender.com/api',
         ],
         'local' => [
-            'Local1' => 'http://localhost:8000/api',
-            'Local2' => 'https://smartbus-api-gateway.test/api',
-            'Cloud' => 'https://smartbus-api-gateway-dev.onrender.com/api',
+            'Local' => env('APP_URL', 'http://localhost:8000').'/api',
         ],
         default => [
             'Development' => 'https://smartbus-api-gateway-dev.onrender.com/api',
@@ -191,6 +189,10 @@ return [
      *     ],
      * ],
      */
-    // 'security_strategy' => \Dedoc\Scramble\SecurityDocumentation\MiddlewareAuthSecurityStrategy::class,
-    'security_strategy' => null,
+    'security_strategy' => [
+        MiddlewareAuthSecurityStrategy::class,
+        [
+            'middleware' => ['validate.token'],
+        ],
+    ],
 ];
