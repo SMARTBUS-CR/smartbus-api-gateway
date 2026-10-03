@@ -17,7 +17,7 @@ http {
         listen $PORT;
         server_name _;
 
-        resolver 8.8.8.8 1.1.1.1 valid=300s;
+        resolver ${DNS_RESOLVER} valid=300s;
         resolver_timeout 5s;
 
         # Catch Reverb WebSocket connections (supports /api/gps/app/... and /app/...)
