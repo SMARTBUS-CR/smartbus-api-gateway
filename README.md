@@ -26,11 +26,13 @@ Este repositorio corresponde al **API Gateway** del proyecto, el punto único de
 ---
 
 ## Stack Tecnológico y Características Principales
-### Enrutamiento, Caché e Identidad
-* **Proxy Reverse Dinámico:** Redirección transparente de peticiones hacia microservicios backend basados en segmentos de URL (`/api/{service}/{path}`).
-* **Introspección y Caché de Tokens:** Middleware `ValidateAuthToken` que valida la autenticidad de los tokens de sesión contra el microservicio de Auth. Implementa un mecanismo de caché centralizada con clave `hash('sha256')` para reducir la latencia y evitar peticiones repetidas entre microservicios. 
-* **Inyección Contextual de Cabeceras:** Extracción de identidades y roles validados (`X-User-Id`, `X-User-Roles`) para adjuntarlos automáticamente a los encabezados HTTP antes de reenviar las peticiones a microservicios downstream.
-* **Invalidación Proactiva de Sesión:** Limpieza automática de la memoria caché de introspección inmediatamente después de procesar peticiones al endpoint de cierre de sesión (`logout`). 
+### Enrutamiento y Validación de Sesiones
+* **Proxy inverso:** Reenvío de solicitudes hacia los microservicios mediante rutas `/api/{service}/{path}`.
+* **Validación de tokens sin caché:** El middleware `ValidateAuthToken` consulta al servicio de autenticación en cada solicitud protegida. Las validaciones positivas anteriores no se reutilizan para autorizar solicitudes.
+* **Revocación de sesiones:** Un token revocado por cierre de sesión, cambio de contraseña o eliminación de cuenta se rechaza en la siguiente validación contra autenticación.
+* **Reenvío de cabeceras:** Se conservan las cabeceras pertinentes, como `Authorization` y `Accept-Language`, al reenviar la solicitud al servicio de destino.
+* **Errores de autenticación:** Se conservan los rechazos devueltos por autenticación. Si no es posible conectarse para validar el token, se devuelve `503 Service Unavailable`.
+* **Registros sin datos sensibles:** No se registran los cuerpos completos de solicitudes de login ni de respuestas de los microservicios. Se conserva información operativa, como el estado HTTP.
 
 ### Capa de Seguridad Estricta 
 * **Cabeceras de Seguridad Avanzadas (`SecurityHeaders`):** Middleware global que inyecta automáticamente defensas clave en todas las respuestas HTTP: 
@@ -44,8 +46,74 @@ Este repositorio corresponde al **API Gateway** del proyecto, el punto único de
 
 ### Calidad e Internacionalización 
 * **Soporte Bilingüe (i18n):** Middleware `SetLocale` que procesa la cabecera `Accept-Language` para adaptar mensajes y respuestas del gateway (Español / Inglés). 
-* **Suite de Pruebas Automatizadas (`pestphp/pest`):** Cobertura exhaustiva que valida la autenticación de rutas públicas y privadas, el comportamiento de la caché, la invalidación de tokens en logout, la inyección de headers contextuales, el Rate Limiting, la política CORS y las cabeceras de seguridad. 
+* **Suite de Pruebas Automatizadas (`pestphp/pest`):** Cobertura de proxies, validación de tokens por solicitud, rechazo de tokens revocados aunque exista una caché antigua, retiro de endpoints administrativos, eliminación de cuentas, propagación de errores y protección de datos sensibles en logs.
 * **Estandarización de Código (`laravel/pint`):** Aplicación de reglas de estilo de código para mantener uniformidad en el repositorio. 
+
+## Autogestión de Cuenta del Pasajero
+
+| Método   | Ruta del Gateway          | Ruta en Autenticación |
+| -------- | ------------------------- | --------------------- |
+| `PATCH`  | `/api/auth/user`          | `/api/user`           |
+| `PUT`    | `/api/auth/user/password` | `/api/user/password`  |
+| `DELETE` | `/api/auth/user`          | `/api/user`           |
+
+Estas rutas operan sobre el propietario del token, sin recibir un identificador de usuario de destino.
+
+### Eliminación de Cuenta
+
+Enviar `DELETE /api/auth/user` con las cabeceras:
+
+```http
+Authorization: Bearer <token>
+Content-Type: application/json
+Accept-Language: es
+```
+
+Y el cuerpo JSON:
+
+```json
+{
+  "current_password": "TuContraseñaActual",
+  "confirm_deletion": true
+}
+```
+
+Autenticación verifica que la cuenta tenga el correo verificado, pertenezca exclusivamente a un pasajero y no tenga roles adicionales en ninguna compañía. También valida la contraseña actual y la confirmación.
+
+Una eliminación exitosa devuelve `200 OK`:
+
+```json
+{
+  "meta": {
+    "message": "Tu cuenta ha sido eliminada correctamente."
+  }
+}
+```
+
+La cuenta se elimina lógicamente y se revocan todos sus tokens, incluido el utilizado en la solicitud. Se conservan los datos personales, el UUID y las referencias históricas; esto no constituye una eliminación definitiva ni una anonimización.
+
+La operación en autenticación es transaccional: si falla, se revierten la eliminación y la revocación de tokens.
+
+### Errores y Límites
+
+| Estado | Significado                                                                  |
+| ------ | ---------------------------------------------------------------------------- |
+| `401`  | Token ausente, inválido, expirado o revocado.                                |
+| `403`  | Correo sin verificar o cuenta que no pertenece exclusivamente a un pasajero. |
+| `422`  | Contraseña actual o confirmación inválida.                                   |
+| `429`  | Límite de solicitudes excedido.                                              |
+| `500`  | Fallo inesperado del servicio.                                               |
+| `503`  | Servicio de autenticación no disponible.                                     |
+
+El Gateway conserva el estado y el cuerpo de los rechazos devueltos por autenticación.
+
+El Gateway aplica su límite general de 60 solicitudes por minuto por token o dirección IP. Autenticación limita los intentos de eliminación a cinco por minuto por cuenta autenticada.
+
+### Retiro de Proxies Administrativos
+
+Se retiraron los proxies de usuarios, catálogos de roles y permisos, y asignación de roles y permisos a usuarios. Sus rutas ya no están disponibles.
+
+La gestión administrativa se realiza directamente en el Dashboard. Se conservan los proxies de registro, login, verificación de correo, recuperación de contraseña, consulta del usuario autenticado, validación de tokens, logout y autogestión del pasajero.
 
 --- 
 

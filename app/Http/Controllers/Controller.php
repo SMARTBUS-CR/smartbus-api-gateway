@@ -49,7 +49,6 @@ abstract class Controller
 
         Log::info('Response received from service', [
             'status' => $response->status(),
-            'body' => $response->body(),
         ]);
 
         if ($callback) {

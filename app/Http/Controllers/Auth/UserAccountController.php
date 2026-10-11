@@ -58,4 +58,32 @@ class UserAccountController extends Controller
             'user/password'
         );
     }
+
+    /**
+     * Delete Passenger Account
+     *
+     * Forwards the authenticated passenger's account deletion request.
+     * Authentication enforces exclusive passenger access, email verification,
+     * current password validation, and explicit deletion confirmation.
+     *
+     * Successful deletion revokes all account access tokens.
+     * Personal data and historical references are retained through soft deletion.
+     */
+    #[BodyParameter('current_password', required: true, type: 'string', format: 'password', description: 'The authenticated passenger’s current password.')]
+    #[BodyParameter('confirm_deletion', required: true, type: 'boolean', description: 'Explicit confirmation of account deletion. Send true.')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_OK, description: 'Passenger account soft-deleted and all access tokens revoked.', type: 'array{meta: array{message: string}}')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, description: 'Missing, invalid, expired, or revoked access token.')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_FORBIDDEN, description: 'Email verification required or the account is not exclusively a passenger.', type: 'array{errors: list<array{status: string, title: string, detail: string}>}')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_UNPROCESSABLE_ENTITY, description: 'Invalid current password or deletion confirmation.', type: 'array{errors: list<array{status: int, title: string, detail: string, source: array{pointer: string}}>}')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_TOO_MANY_REQUESTS, description: 'Gateway or Authentication request limit exceeded.')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_INTERNAL_SERVER_ERROR, description: 'Unexpected failure returned by the service.')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_SERVICE_UNAVAILABLE, description: 'Authentication service is unavailable.', type: 'array{errors: list<array{status: string, code?: string, title: string, detail: string}>}')]
+    public function destroy(Request $request): Response
+    {
+        return $this->proxyTo(
+            $request,
+            'auth',
+            'user',
+        );
+    }
 }

@@ -4,8 +4,9 @@ namespace App\Http\Middleware;
 
 use Carbon\Carbon;
 use Closure;
+use Exception;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
@@ -13,16 +14,13 @@ use Symfony\Component\HttpFoundation\Response;
 class ValidateAuthToken
 {
     /**
-     * Handle an incoming request.
+     * Validate the Bearer token against Authentication on every protected request.
      *
-     * This middleware validates the Bearer token provided in the request's Authorization header.
-     * It checks the token's validity by consulting the cache first. If the token is not found
-     * in the cache, it makes a request to the Authentication service to validate the token.
+     * Positive validation results are not cached, so revoked tokens cannot
+     * continue accessing other services through an outdated validation.
      */
     public function handle(Request $request, Closure $next): Response
     {
-        Log::info("Validating auth token for request to {$request->path()}");
-
         if ($request->routeIs('auth.token.validate')) {
             return $next($request);
         }
@@ -30,59 +28,72 @@ class ValidateAuthToken
         $token = $request->bearerToken();
 
         if (empty($token)) {
-            Log::error("No Bearer Token Found in request to {$request->path()}");
-
             return response()->json(
                 ['error' => __('http-statuses.401')],
-                Response::HTTP_UNAUTHORIZED
+                Response::HTTP_UNAUTHORIZED,
             );
         }
 
-        $cacheKey = 'token_valid:'.hash('sha256', $token);
+        try {
+            $response = Http::baseUrl(config('smartbus.auth.url'))
+                ->withToken($token)
+                ->withHeaders([
+                    'Accept-Language' => $request->header(
+                        'Accept-Language',
+                        (string) config('app.locale', 'en'),
+                    ),
+                ])
+                ->acceptJson()
+                ->connectTimeout(3)
+                ->timeout(5)
+                ->when(app()->isLocal(), fn ($http) => $http->withoutVerifying())
+                ->post('/api/token/validate');
 
-        $userData = Cache::remember($cacheKey, 600, function () use ($token) {
-            Log::info('Token not found in cache, validating with Auth service');
+            Log::info('Token validation response received', [
+                'status' => $response->status(),
+            ]);
 
-            try {
-                $response = Http::baseUrl(config('smartbus.auth.url'))
-                    ->withToken($token)
-                    ->acceptJson()
-                    ->timeout(5)
-                    ->when(app()->isLocal(), fn ($http) => $http->withoutVerifying())
-                    ->post('/api/token/validate');
-
-                Log::info('Token validation response: ', [
-                    'status' => $response->status(),
-                    'body' => $response->body(),
-                ]);
-
-                if (! $response->successful()) {
-                    return null;
-                }
-
-                $data = $response->json('meta');
-
-                if (empty($data['valid']) || $data['valid'] !== true) {
-                    return null;
-                }
-
-                Log::info('Token is valid, caching user data');
-
-                $expiresAt = isset($data['expires_at']) ? Carbon::parse($data['expires_at']) : now()->addMinutes(10);
-                $ttl = min(now()->diffInSeconds($expiresAt, false), 600);
-
-                return $ttl > 0 ? $data : null;
-
-            } catch (\Exception $e) {
-                Log::error('Error validating token: '.$e->getMessage());
-
-                return null;
+            if (! $response->successful()) {
+                return response(
+                    $response->body(),
+                    $response->status(),
+                )->header(
+                    'Content-Type',
+                    $response->header('Content-Type') ?: 'application/json',
+                );
             }
-        });
 
-        if (! $userData) {
-            Log::error('Token is invalid or expired for request to '.$request->path());
+            $data = $response->json('meta');
 
+            $isValid = $response->successful()
+                && is_array($data)
+                && ($data['valid'] ?? null) === true
+                && (
+                    ! isset($data['expires_at'])
+                    || Carbon::parse($data['expires_at'])->isFuture()
+                );
+        } catch (ConnectionException $exception) {
+            Log::warning('Authentication service is unreachable.', [
+                'exception_type' => $exception::class,
+            ]);
+
+            return response()->json([
+                'errors' => [[
+                    'status' => '503',
+                    'code' => 'authentication_service_unavailable',
+                    'title' => __('Service Unavailable'),
+                    'detail' => __('Authentication service is temporarily unavailable.'),
+                ]],
+            ], Response::HTTP_SERVICE_UNAVAILABLE);
+        } catch (Exception $exception) {
+            Log::error('Authentication token validation failed', [
+                'exception_type' => $exception::class,
+            ]);
+
+            $isValid = false;
+        }
+
+        if (! $isValid) {
             return response()->json([
                 'message' => __('Invalid or expired token.'),
             ], Response::HTTP_UNAUTHORIZED);
