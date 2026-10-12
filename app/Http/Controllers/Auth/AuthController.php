@@ -16,7 +16,7 @@ use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Response as HttpStatus;
 
-#[Group('Authentication Service', 'This group contains endpoints that interact with the Authentication microservice. <br>These endpoints handle user registration, login, and logout operations by forwarding requests to the Auth microservice.<br><br>For more information about the Auth microservice, see the [SmartBus Authentication](https://smartbus-authentication.onrender.com/) documentation.', weight: 2)]
+#[Group(Services::AUTH_LABEL, Services::AUTH_DESCRIPTION, weight: Services::AUTH_WEIGHT)]
 class AuthController extends Controller
 {
     /**
@@ -164,9 +164,10 @@ class AuthController extends Controller
     }
 
     /**
-     * User Information
+     * User Profile
      *
-     * Returns the authenticated user's information along with their roles.
+     * Retrieves the authenticated user's account information.
+     * The response includes the user's details and their assigned roles.
      *
      * For more information about the user endpoint, see the
      * [Get Authenticated User](https://smartbus-authentication.onrender.com/docs/api#tag/authentication/GET/user)

@@ -22,6 +22,11 @@ class ValidateAuthToken
     public function handle(Request $request, Closure $next): Response
     {
         Log::info("Validating auth token for request to {$request->path()}");
+
+        if ($request->routeIs('auth.token.validate')) {
+            return $next($request);
+        }
+
         $token = $request->bearerToken();
 
         if (empty($token)) {

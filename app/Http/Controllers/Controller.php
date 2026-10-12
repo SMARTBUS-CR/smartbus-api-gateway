@@ -56,11 +56,13 @@ abstract class Controller
             $callback($response);
         }
 
+        $contentType = $response->header('Content-Type') ?? 'application/json';
+
         return response(
             $response->body(),
             $response->status(),
         )->withHeaders([
-            'Content-Type' => 'application/json',
+            'Content-Type' => $contentType,
         ]);
     }
 

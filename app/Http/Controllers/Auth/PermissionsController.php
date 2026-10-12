@@ -17,8 +17,6 @@ class PermissionsController extends Controller
      * List Permissions
      *
      * Lists the permissions available to the application.
-     *
-     * @authenticate
      */
     #[QueryParameter('fields[permissions]', type: 'array<string>', infer: false)]
     #[ResponseAttribute(status: Response::HTTP_OK, description: 'Available permissions returned successfully.', mediaType: 'application/vnd.api+json', type: 'array{data: array<int, array{type: string, id: string, attributes: array<string, mixed>}}')]

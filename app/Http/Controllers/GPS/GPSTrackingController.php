@@ -17,7 +17,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Response as HttpStatus;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
-#[Group('GPS Tracking Service', 'This group contains endpoints that interact with the GPS microservice. <br>These endpoints handle GPS location data and related operations by forwarding requests to the GPS microservice.<br><br>For more information about the GPS microservice, see the [SmartBus GPS Tracking](https://smartbus-gps-tracking.onrender.com/) documentation.', weight: 7)]
+#[Group(Services::GPS_LABEL, Services::GPS_DESCRIPTION, weight: Services::GPS_WEIGHT)]
 class GPSTrackingController extends Controller
 {
     /**

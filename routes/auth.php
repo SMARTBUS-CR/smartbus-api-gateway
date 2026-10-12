@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\PermissionsController;
 use App\Http\Controllers\Auth\RolesController;
+use App\Http\Controllers\Auth\UserAccountController;
 use App\Http\Controllers\Auth\UserPermissionsController;
 use App\Http\Controllers\Auth\UserRolesController;
 use App\Http\Controllers\Auth\UsersController;
@@ -42,6 +43,12 @@ Route::prefix(Services::AUTH->value)->group(function () {
             Route::post('token/validate', 'validateToken')->name('auth.token.validate');
             Route::post('logout', 'logout')->name('auth.logout');
             Route::get('user', 'user')->name('auth.user');
+        });
+
+        // User Account Routes for the Authentication service
+        Route::controller(UserAccountController::class)->group(function () {
+            Route::patch('user', 'update')->name('auth.user.update');
+            Route::put('user/password', 'updatePassword')->name('auth.user.password.update');
         });
 
         // User Management Routes for the Authentication service

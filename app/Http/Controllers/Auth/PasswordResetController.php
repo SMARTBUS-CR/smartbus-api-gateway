@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Response as HttpStatus;
 
-#[Group(name: 'Auth Service - Password Reset', description: 'Endpoints for password reset functionality in the Authentication microservice.', weight: 2)]
+#[Group(name: Services::AUTH_LABEL)]
 class PasswordResetController extends Controller
 {
     /**
