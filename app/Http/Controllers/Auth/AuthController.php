@@ -10,7 +10,6 @@ use Dedoc\Scramble\Attributes\QueryParameter;
 use Dedoc\Scramble\Attributes\Response as ResponseAttribute;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\UnauthorizedException;
 use Illuminate\Validation\ValidationException;
@@ -89,7 +88,7 @@ class AuthController extends Controller
     #[ResponseAttribute(status: HttpStatus::HTTP_OK, mediaType: 'application/vnd.api+json', type: 'array{data: array{type: string, id: string, attributes: array<string, mixed>}, included?: array<int, array{type: string, id: string, attributes: array<string, mixed>}}, meta: array{access_token: string, token_type: string, expires_at: string}}')]
     public function login(Request $request): Response
     {
-        Log::info('Login request received', ['request' => $request->all()]);
+        Log::info('Login request received');
 
         /**
          * @body array{
@@ -168,16 +167,10 @@ class AuthController extends Controller
     #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, description: 'Token is invalid or expired.', mediaType: 'application/json', type: 'array{message: string}')]
     public function logout(Request $request): Response
     {
-        $token = $request->bearerToken();
-        $clearCacheBeforeLogout = fn ($response) => $response->status() === HttpStatus::HTTP_OK
-            ? Cache::forget('token_valid:'.hash('sha256', $token))
-            : null;
-
         return $this->proxyTo(
             $request,
             Services::AUTH->value,
-            'logout',
-            $clearCacheBeforeLogout
+            'logout'
         );
     }
 

@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\postJson;
@@ -49,6 +50,67 @@ describe('Public Authentication', function () {
             'password_confirmation' => 'Password123!',
         ])->assertCreated()->assertJsonPath('user.name', 'Passenger Test');
     });
+
+    it('proxies login without logging sensitive data', function (): void {
+        Log::spy();
+
+        $password = 'SensitivePassword!2026';
+        $accessToken = 'sensitive-issued-access-token';
+
+        $responseBody = [
+            'data' => [
+                'type' => 'users',
+                'id' => 'passenger-id',
+                'attributes' => [
+                    'email' => TEST_EMAIL,
+                ],
+            ],
+            'meta' => [
+                'access_token' => $accessToken,
+                'token_type' => 'Bearer',
+            ],
+        ];
+
+        Http::fake([
+            AUTH_SERVICE_URL.'/api/login' => Http::response($responseBody, 200),
+        ]);
+
+        postJson(route('auth.login'), [
+            'email' => TEST_EMAIL,
+            'password' => $password,
+        ])
+            ->assertOk()
+            ->assertExactJson($responseBody);
+
+        $sensitiveValues = [$password, $accessToken, TEST_EMAIL];
+
+        foreach ([
+            'debug',
+            'info',
+            'notice',
+            'warning',
+            'error',
+            'critical',
+            'alert',
+            'emergency',
+            'log',
+        ] as $level) {
+            Log::shouldNotHaveReceived(
+                $level,
+                function (...$arguments) use ($sensitiveValues): bool {
+                    $loggedData = json_encode($arguments, JSON_THROW_ON_ERROR);
+
+                    foreach ($sensitiveValues as $value) {
+                        if (str_contains($loggedData, $value)) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                },
+            );
+        }
+    });
 });
 
 describe('Authenticated Authentication', function () {
@@ -58,14 +120,28 @@ describe('Authenticated Authentication', function () {
             ->assertJson(['error' => __('http-statuses.401')]);
     });
 
-    it('returns 401 when token validation fails', function () {
+    it('returns 401 when token validation fails', function (): void {
+        $responseBody = [
+            'errors' => [[
+                'status' => '401',
+                'title' => 'Unauthorized',
+                'detail' => 'Authentication is required.',
+            ]],
+        ];
+
         Http::fake([
-            AUTH_SERVICE_URL.'/api/token/validate' => Http::response([], 401),
+            AUTH_SERVICE_URL.'/api/token/validate' => Http::response(
+                $responseBody,
+                401,
+            ),
         ]);
 
-        withToken('invalid-token')->getJson(route('auth.user'))
+        withToken('invalid-token')
+            ->getJson(route('auth.user'))
             ->assertUnauthorized()
-            ->assertJson(['message' => __('Invalid or expired token.')]);
+            ->assertExactJson($responseBody);
+
+        Http::assertSentCount(1);
     });
 
     it('proxies token validation only once', function () {
@@ -91,29 +167,78 @@ describe('Authenticated Authentication', function () {
             ->assertJsonPath('user.id', 10);
     });
 
-    it('caches token validation between requests', function () {
+    it('validates the token against authentication on every request', function (): void {
         Http::fake([
             AUTH_SERVICE_URL.'/api/token/validate' => Http::response(authTokenMeta(), 200),
             AUTH_SERVICE_URL.'/api/user' => Http::response([], 200),
         ]);
 
-        withToken(TEST_TOKEN)->getJson(route('auth.user'));
-        withToken(TEST_TOKEN)->getJson(route('auth.user'));
+        withToken(TEST_TOKEN)->getJson(route('auth.user'))->assertOk();
+        withToken(TEST_TOKEN)->getJson(route('auth.user'))->assertOk();
 
-        expect(Http::recorded(fn ($request) => $request->url() === AUTH_SERVICE_URL.'/api/token/validate'))
-            ->toHaveCount(1);
+        expect(Http::recorded(
+            fn ($request): bool => $request->url() === AUTH_SERVICE_URL.'/api/token/validate',
+        ))->toHaveCount(2);
     });
 
-    it('clears cached token validation after a successful logout', function () {
-        $cacheKey = 'token_valid:'.hash('sha256', TEST_TOKEN);
-        Cache::put($cacheKey, ['user_id' => 1], now()->addMinutes(10));
-
+    it('validates the token before forwarding logout', function (): void {
         Http::fake([
-            AUTH_SERVICE_URL.'/api/logout' => Http::response(['message' => 'Session closed successfully.'], 200),
+            AUTH_SERVICE_URL.'/api/token/validate' => Http::response(authTokenMeta(), 200),
+            AUTH_SERVICE_URL.'/api/logout' => Http::response([
+                'meta' => ['message' => 'Session closed successfully.'],
+            ], 200),
         ]);
 
-        withToken(TEST_TOKEN)->postJson(route('auth.logout'))->assertOk();
+        withToken(TEST_TOKEN)
+            ->postJson(route('auth.logout'))
+            ->assertOk()
+            ->assertJsonPath('meta.message', 'Session closed successfully.');
 
-        expect(Cache::has($cacheKey))->toBeFalse();
+        Http::assertSent(fn ($request): bool => $request->url() === AUTH_SERVICE_URL.'/api/token/validate'
+        );
+
+        Http::assertSent(fn ($request): bool => $request->method() === 'POST'
+            && $request->url() === AUTH_SERVICE_URL.'/api/logout'
+        );
+
+        Http::assertSentCount(2);
+    });
+
+    it('rejects a revoked token even when a positive validation is cached', function (): void {
+        config(['smartbus.gps.url' => GPS_SERVICE_URL]);
+
+        Cache::put(
+            'token_valid:'.hash('sha256', TEST_TOKEN),
+            authTokenMeta()['meta'],
+            now()->addMinutes(10),
+        );
+
+        Http::fake([
+            AUTH_SERVICE_URL.'/api/token/validate' => Http::response([
+                'errors' => [[
+                    'status' => '401',
+                    'title' => 'Unauthorized',
+                    'detail' => 'Authentication is required.',
+                ]],
+            ], 401),
+            GPS_SERVICE_URL.'/api/*' => Http::response([
+                'data' => ['latitude' => 10.45, 'longitude' => -84.01],
+            ], 200),
+        ]);
+
+        withToken(TEST_TOKEN)
+            ->getJson(route('gps.trips.location', [
+                'tripId' => '01a11d61-c541-731e-aa08-bd8c5adb6863',
+            ]))
+            ->assertUnauthorized();
+
+        Http::assertSent(fn ($request): bool => $request->url() === AUTH_SERVICE_URL.'/api/token/validate'
+            && $request->hasHeader('Authorization', 'Bearer '.TEST_TOKEN)
+        );
+
+        Http::assertNotSent(fn ($request): bool => str_starts_with($request->url(), GPS_SERVICE_URL.'/')
+        );
+
+        Http::assertSentCount(1);
     });
 });
