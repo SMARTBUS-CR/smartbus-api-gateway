@@ -8,6 +8,7 @@ use Dedoc\Scramble\Attributes\BodyParameter;
 use Dedoc\Scramble\Attributes\Group;
 use Dedoc\Scramble\Attributes\QueryParameter;
 use Dedoc\Scramble\Attributes\Response as ResponseAttribute;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -123,15 +124,32 @@ class AuthController extends Controller
      *
      * @throws UnauthorizedException
      */
-    #[ResponseAttribute(status: HttpStatus::HTTP_OK, mediaType: 'application/json', type: 'array{meta: array{valid: bool, expires_at: string}}')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_OK, mediaType: 'application/json', type: 'array{meta: array{valid: bool, expires_at: string|null}}')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_FORBIDDEN, description: 'Access rejected by the Authentication service.', mediaType: 'application/json')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_SERVICE_UNAVAILABLE, description: 'Authentication service is unavailable.', mediaType: 'application/json')]
     #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, description: 'Token is invalid or expired.', mediaType: 'application/json', type: 'array{errors: array{status: string, title: string, detail: string}}')]
     public function validateToken(Request $request): Response
     {
-        return $this->proxyTo(
-            $request,
-            Services::AUTH->value,
-            'token/validate'
-        );
+        try {
+            return $this->proxyTo(
+                $request,
+                Services::AUTH->value,
+                'token/validate',
+            );
+        } catch (ConnectionException) {
+            Log::warning('Authentication service is unreachable.', [
+                'route' => $request->route()?->getName(),
+            ]);
+
+            return response()->json([
+                'errors' => [[
+                    'status' => '503',
+                    'code' => 'authentication_service_unavailable',
+                    'title' => __('Service Unavailable'),
+                    'detail' => __('Authentication service is temporarily unavailable.'),
+                ]],
+            ], HttpStatus::HTTP_SERVICE_UNAVAILABLE);
+        }
     }
 
     /**
