@@ -10,4 +10,7 @@ return [
     'eta' => [
         'url' => env('ETA_SERVICE_URL', 'http://localhost:8002'),
     ],
+    'operations' => [
+        'url' => env('OPERATIONS_SERVICE_URL', env('DASHBOARD_SERVICE_URL', 'http://localhost:8000')),
+    ],
 ];

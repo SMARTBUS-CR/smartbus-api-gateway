@@ -6,6 +6,7 @@ use Tests\TestCase;
 
 const AUTH_SERVICE_URL = 'https://smartbus-authentication.test';
 const GPS_SERVICE_URL = 'https://smartbus-gps-tracking.test';
+const OPERATIONS_SERVICE_URL = 'https://smartbus-dashboard.test';
 const TEST_EMAIL = 'user@example.com';
 const TEST_TOKEN = 'valid-sanctum-token';
 

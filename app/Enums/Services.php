@@ -22,7 +22,14 @@ enum Services: string
 
     public const ETA_WEIGHT = 3;
 
+    public const OPERATIONS_LABEL = 'Operational Transport Service';
+
+    public const OPERATIONS_DESCRIPTION = 'Endpoints for transport catalogue, route planning, driver assignments, and passenger favorites forwarded to the Dashboard microservice.';
+
+    public const OPERATIONS_WEIGHT = 4;
+
     case AUTH = 'auth';
     case GPS = 'gps';
     case ETA = 'eta';
+    case OPERATIONS = 'ops';
 }
