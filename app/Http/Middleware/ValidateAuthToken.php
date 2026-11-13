@@ -7,6 +7,7 @@ use Closure;
 use Exception;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,8 +17,8 @@ class ValidateAuthToken
     /**
      * Validate the Bearer token against Authentication on every protected request.
      *
-     * Positive validation results are not cached, so revoked tokens cannot
-     * continue accessing other services through an outdated validation.
+     * Positive validation results are cached with a short TTL to optimize
+     * high-frequency telemetry and requests, bounded by token lifetime.
      */
     public function handle(Request $request, Closure $next): Response
     {
@@ -32,6 +33,12 @@ class ValidateAuthToken
                 ['error' => __('http-statuses.401')],
                 Response::HTTP_UNAUTHORIZED,
             );
+        }
+
+        $cacheKey = 'gateway:token_valid:'.hash('sha256', $token);
+
+        if (Cache::get($cacheKey) === true) {
+            return $next($request);
         }
 
         try {
@@ -72,6 +79,16 @@ class ValidateAuthToken
                     ! isset($data['expires_at'])
                     || Carbon::parse($data['expires_at'])->isFuture()
                 );
+
+            if ($isValid) {
+                $ttl = (int) config('smartbus.auth.token_cache_ttl', 30);
+                if (isset($data['expires_at'])) {
+                    $ttl = min($ttl, max(0, (int) now()->diffInSeconds(Carbon::parse($data['expires_at']), false)));
+                }
+                if ($ttl > 0) {
+                    Cache::put($cacheKey, true, $ttl);
+                }
+            }
         } catch (ConnectionException $exception) {
             Log::warning('Authentication service is unreachable.', [
                 'exception_type' => $exception::class,

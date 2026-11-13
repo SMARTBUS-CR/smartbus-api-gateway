@@ -167,7 +167,7 @@ describe('Authenticated Authentication', function () {
             ->assertJsonPath('user.id', 10);
     });
 
-    it('validates the token against authentication on every request', function (): void {
+    it('caches token validation so subsequent requests within TTL do not hit authentication', function (): void {
         Http::fake([
             AUTH_SERVICE_URL.'/api/token/validate' => Http::response(authTokenMeta(), 200),
             AUTH_SERVICE_URL.'/api/user' => Http::response([], 200),
@@ -178,7 +178,37 @@ describe('Authenticated Authentication', function () {
 
         expect(Http::recorded(
             fn ($request): bool => $request->url() === AUTH_SERVICE_URL.'/api/token/validate',
-        ))->toHaveCount(2);
+        ))->toHaveCount(1);
+    });
+
+    it('invalidates cached token upon explicit logout', function (): void {
+        Http::fake([
+            AUTH_SERVICE_URL.'/api/token/validate' => Http::response(authTokenMeta(), 200),
+            AUTH_SERVICE_URL.'/api/user' => Http::response([], 200),
+            AUTH_SERVICE_URL.'/api/logout' => Http::response([
+                'meta' => ['message' => 'Session closed successfully.'],
+            ], 200),
+        ]);
+
+        // First request populates cache
+        withToken(TEST_TOKEN)->getJson(route('auth.user'))->assertOk();
+
+        // Second request uses cache
+        withToken(TEST_TOKEN)->getJson(route('auth.user'))->assertOk();
+
+        expect(Http::recorded(
+            fn ($request): bool => $request->url() === AUTH_SERVICE_URL.'/api/token/validate',
+        ))->toHaveCount(1);
+
+        // Logout hits cache in validate.token and then controller evicts token from cache
+        withToken(TEST_TOKEN)->postJson(route('auth.logout'))->assertOk();
+
+        // Third request after logout must re-query Auth because cache was forgotten
+        withToken(TEST_TOKEN)->getJson(route('auth.user'))->assertOk();
+
+        expect(Http::recorded(
+            fn ($request): bool => $request->url() === AUTH_SERVICE_URL.'/api/token/validate',
+        ))->toHaveCount(2); // 1 (initial validate) + 0 (logout used cache) + 1 (re-validate after eviction)
     });
 
     it('validates the token before forwarding logout', function (): void {

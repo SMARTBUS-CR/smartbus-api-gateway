@@ -3,6 +3,7 @@
 return [
     'auth' => [
         'url' => env('AUTH_SERVICE_URL', 'http://localhost:8000'),
+        'token_cache_ttl' => (int) env('AUTH_TOKEN_CACHE_TTL', 30),
     ],
     'gps' => [
         'url' => env('GPS_SERVICE_URL', 'http://localhost:8001'),
