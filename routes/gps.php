@@ -15,7 +15,7 @@ Route::prefix(Services::GPS->value)->group(function () {
             // RESTful API Routes for the GPS Tracking service
             Route::post('locations', 'store')->name('gps.locations.store');
             Route::get('trips/{tripId}/location', 'latestForTrip')
-                ->whereNumber('tripId') // TODO: Verify if this is the correct constraint for tripId
+                ->whereUuid('tripId')
                 ->name('gps.trips.location');
 
             // Authentication Route for WebSockets / Reverb Broadcast

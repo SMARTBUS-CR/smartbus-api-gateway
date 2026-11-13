@@ -8,6 +8,7 @@ use Dedoc\Scramble\Attributes\BodyParameter;
 use Dedoc\Scramble\Attributes\Group;
 use Dedoc\Scramble\Attributes\QueryParameter;
 use Dedoc\Scramble\Attributes\Response as ResponseAttribute;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -16,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Response as HttpStatus;
 
-#[Group('Authentication Service', 'This group contains endpoints that interact with the Authentication microservice. <br>These endpoints handle user registration, login, and logout operations by forwarding requests to the Auth microservice.<br><br>For more information about the Auth microservice, see the [SmartBus Authentication](https://smartbus-authentication.onrender.com/) documentation.', weight: 1)]
+#[Group(Services::AUTH_LABEL, Services::AUTH_DESCRIPTION, weight: Services::AUTH_WEIGHT)]
 class AuthController extends Controller
 {
     /**
@@ -88,7 +89,7 @@ class AuthController extends Controller
     #[ResponseAttribute(status: HttpStatus::HTTP_OK, mediaType: 'application/vnd.api+json', type: 'array{data: array{type: string, id: string, attributes: array<string, mixed>}, included?: array<int, array{type: string, id: string, attributes: array<string, mixed>}}, meta: array{access_token: string, token_type: string, expires_at: string}}')]
     public function login(Request $request): Response
     {
-        Log::info('Login request received', ['request' => $request->all()]);
+        Log::info('Login request received');
 
         /**
          * @body array{
@@ -123,15 +124,32 @@ class AuthController extends Controller
      *
      * @throws UnauthorizedException
      */
-    #[ResponseAttribute(status: HttpStatus::HTTP_OK, mediaType: 'application/json', type: 'array{meta: array{valid: bool, expires_at: string}}')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_OK, mediaType: 'application/json', type: 'array{meta: array{valid: bool, expires_at: string|null}}')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_FORBIDDEN, description: 'Access rejected by the Authentication service.', mediaType: 'application/json')]
+    #[ResponseAttribute(status: HttpStatus::HTTP_SERVICE_UNAVAILABLE, description: 'Authentication service is unavailable.', mediaType: 'application/json')]
     #[ResponseAttribute(status: HttpStatus::HTTP_UNAUTHORIZED, description: 'Token is invalid or expired.', mediaType: 'application/json', type: 'array{errors: array{status: string, title: string, detail: string}}')]
     public function validateToken(Request $request): Response
     {
-        return $this->proxyTo(
-            $request,
-            Services::AUTH->value,
-            'token/validate'
-        );
+        try {
+            return $this->proxyTo(
+                $request,
+                Services::AUTH->value,
+                'token/validate',
+            );
+        } catch (ConnectionException) {
+            Log::warning('Authentication service is unreachable.', [
+                'route' => $request->route()?->getName(),
+            ]);
+
+            return response()->json([
+                'errors' => [[
+                    'status' => '503',
+                    'code' => 'authentication_service_unavailable',
+                    'title' => __('Service Unavailable'),
+                    'detail' => __('Authentication service is temporarily unavailable.'),
+                ]],
+            ], HttpStatus::HTTP_SERVICE_UNAVAILABLE);
+        }
     }
 
     /**
@@ -151,22 +169,22 @@ class AuthController extends Controller
     public function logout(Request $request): Response
     {
         $token = $request->bearerToken();
-        $clearCacheBeforeLogout = fn ($response) => $response->status() === HttpStatus::HTTP_OK
-            ? Cache::forget('token_valid:'.hash('sha256', $token))
-            : null;
+        if (! empty($token)) {
+            Cache::forget('gateway:token_valid:'.hash('sha256', $token));
+        }
 
         return $this->proxyTo(
             $request,
             Services::AUTH->value,
-            'logout',
-            $clearCacheBeforeLogout
+            'logout'
         );
     }
 
     /**
-     * User Information
+     * User Profile
      *
-     * Returns the authenticated user's information along with their roles.
+     * Retrieves the authenticated user's account information.
+     * The response includes the user's details and their assigned roles.
      *
      * For more information about the user endpoint, see the
      * [Get Authenticated User](https://smartbus-authentication.onrender.com/docs/api#tag/authentication/GET/user)

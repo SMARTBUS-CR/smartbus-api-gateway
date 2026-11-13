@@ -49,18 +49,19 @@ abstract class Controller
 
         Log::info('Response received from service', [
             'status' => $response->status(),
-            'body' => $response->body(),
         ]);
 
         if ($callback) {
             $callback($response);
         }
 
+        $contentType = $response->header('Content-Type') ?? 'application/json';
+
         return response(
             $response->body(),
             $response->status(),
         )->withHeaders([
-            'Content-Type' => 'application/json',
+            'Content-Type' => $contentType,
         ]);
     }
 
@@ -81,10 +82,15 @@ abstract class Controller
             Services::AUTH->value => config('smartbus.auth.url'),
             Services::GPS->value => config('smartbus.gps.url'),
             Services::ETA->value => config('smartbus.eta.url'),
+            Services::OPERATIONS->value => config('smartbus.operations.url'),
             default => throw new \InvalidArgumentException(__('Service Not Found').": {$service}"),
         };
 
-        return "$url/api/";
+        if ($service === Services::OPERATIONS->value) {
+            return rtrim((string) $url, '/').'/api/v1/operations/';
+        }
+
+        return rtrim((string) $url, '/').'/api/';
     }
 
     /**

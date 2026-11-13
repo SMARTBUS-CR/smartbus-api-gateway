@@ -6,6 +6,7 @@ use App\Models\User;
 use Dedoc\Scramble\Scramble;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\Parameter;
+use Dedoc\Scramble\Support\Generator\RequestBodyObject;
 use Dedoc\Scramble\Support\Generator\Schema;
 use Dedoc\Scramble\Support\Generator\SecurityScheme;
 use Dedoc\Scramble\Support\Generator\Types\StringType;
@@ -64,6 +65,45 @@ class AppServiceProvider extends ServiceProvider
                             ->description('Language of the response. Supported values: en, es.')
                             ->setSchema(Schema::fromType((new StringType)->enum(['en', 'es'])->default('es'))),
                     ]);
+
+                    if ($operation->operationId !== 'auth.user.destroy') {
+                        continue;
+                    }
+
+                    $bodyParameters = [];
+                    $remainingParameters = [];
+
+                    foreach ($operation->parameters as $parameter) {
+                        if (
+                            ! $parameter instanceof Parameter
+                            || ! in_array(
+                                $parameter->name,
+                                ['current_password', 'confirm_deletion'],
+                                true,
+                            )
+                        ) {
+                            $remainingParameters[] = $parameter;
+
+                            continue;
+                        }
+
+                        if ($parameter->name === 'confirm_deletion') {
+                            $parameter->schema->type->enum([true]);
+                        }
+
+                        $bodyParameters[] = $parameter;
+                    }
+
+                    $operation->parameters = $remainingParameters;
+
+                    $operation->addRequestBodyObject(
+                        RequestBodyObject::make()
+                            ->required()
+                            ->setContent(
+                                'application/json',
+                                Schema::createFromParameters($bodyParameters),
+                            ),
+                    );
                 }
             }
         });

@@ -2,12 +2,9 @@
 
 use App\Enums\Services;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
-use App\Http\Controllers\Auth\PermissionsController;
-use App\Http\Controllers\Auth\RolesController;
-use App\Http\Controllers\Auth\UserPermissionsController;
-use App\Http\Controllers\Auth\UserRolesController;
-use App\Http\Controllers\Auth\UsersController;
+use App\Http\Controllers\Auth\UserAccountController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -28,6 +25,12 @@ Route::prefix(Services::AUTH->value)->group(function () {
         Route::post('reset', 'resetPassword')->name('auth.password.reset');
     });
 
+    // Email Verification routes for the Authentication service
+    Route::prefix('email')->controller(EmailVerificationController::class)->group(function () {
+        Route::post('verify', 'verify')->name('auth.email.verify');
+        Route::post('resend', 'resend')->name('auth.email.resend');
+    });
+
     // Administrative Routes for the Authentication service
     Route::middleware('validate.token')->group(function () {
         // Authenticated routes for the Authentication service
@@ -37,33 +40,11 @@ Route::prefix(Services::AUTH->value)->group(function () {
             Route::get('user', 'user')->name('auth.user');
         });
 
-        // User Management Routes for the Authentication service
-        Route::controller(UsersController::class)->group(function () {
-            Route::get('users', 'index')->name('auth.users.index');
-            Route::post('users', 'store')->name('auth.users.store');
-            Route::get('users/{user}', 'show')->name('auth.users.show');
-            Route::patch('users/{user}', 'update')->name('auth.users.update');
-            Route::delete('users/{user}', 'destroy')->name('auth.users.destroy');
-        });
-
-        // Roles and Permissions Routes for the Authentication service
-        Route::get('roles', [RolesController::class, 'index'])->name('auth.roles.index');
-        Route::get('permissions', [PermissionsController::class, 'index'])->name('auth.permissions.index');
-
-        // User Roles Routes for the Authentication service
-        Route::controller(UserRolesController::class)->group(function () {
-            Route::get('users/{user}/roles', 'roles')->name('auth.users.roles.index');
-            Route::put('users/{user}/roles', 'syncRoles')->name('auth.users.roles.update');
-            Route::post('users/{user}/roles/{role}', 'assignRole')->name('auth.users.roles.store');
-            Route::delete('users/{user}/roles/{role}', 'revokeRole')->name('auth.users.roles.destroy');
-        });
-
-        // User Permissions Routes for the Authentication service
-        Route::controller(UserPermissionsController::class)->group(function () {
-            Route::get('users/{user}/permissions', 'permissions')->name('auth.users.permissions.index');
-            Route::put('users/{user}/permissions', 'syncPermissions')->name('auth.users.permissions.update');
-            Route::post('users/{user}/permissions/{permission}', 'assignPermission')->name('auth.users.permissions.store');
-            Route::delete('users/{user}/permissions/{permission}', 'revokePermission')->name('auth.users.permissions.destroy');
+        // User Account Routes for the Authentication service
+        Route::controller(UserAccountController::class)->group(function () {
+            Route::patch('user', 'update')->name('auth.user.update');
+            Route::put('user/password', 'updatePassword')->name('auth.user.password.update');
+            Route::delete('user', 'destroy')->name('auth.user.destroy');
         });
     });
 });
